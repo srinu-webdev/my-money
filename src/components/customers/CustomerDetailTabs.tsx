@@ -211,7 +211,14 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                     </Td>
                     <Td>{formatCurrency(l.balance.principalRemaining)}</Td>
                     <Td>{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
-                    <Td>{formatCurrency(l.balance.interestAccrued)}</Td>
+                    <Td>
+                      {formatCurrency(l.balance.interestAccrued)}
+                      {l.balance.interestPerPeriod > 0 && l.balance.interestAccrued > 0 ? (
+                        <div className="text-xs font-normal text-text-tertiary">
+                          ≈{Math.round(l.balance.interestAccrued / l.balance.interestPerPeriod)} full period{Math.round(l.balance.interestAccrued / l.balance.interestPerPeriod) === 1 ? "" : "s"} owed
+                        </div>
+                      ) : null}
+                    </Td>
                     <Td className="text-success-dark">{formatCurrency(l.balance.interestPaid)}</Td>
                     <Td className={l.balance.interestRemaining ? "text-warning-dark" : ""}>{formatCurrency(l.balance.interestRemaining)}</Td>
                     <Td>
