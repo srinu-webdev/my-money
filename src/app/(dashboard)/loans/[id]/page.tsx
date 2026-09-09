@@ -1,0 +1,217 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { getActivitiesFor, getCustomerById, getLoanById, getPaymentsByLoan } from "@/lib/queries";
+import { calculateInterestForLoan, calculateLoanBalance, getLoanSchedule, getLoanStatus, FREQ_LABEL, FREQ_NOUN } from "@/lib/calculations";
+import { CalendarClock } from "lucide-react";
+import { StatusBadge } from "@/components/ui/Badge";
+import { StatCard } from "@/components/ui/StatCard";
+import { Card } from "@/components/ui/Card";
+import { formatCurrency } from "@/lib/format";
+import { daysBetween, formatDate, formatDateTime } from "@/lib/dates";
+import { Wallet, Percent, CheckCircle2, Clock, TrendingUp, CreditCard, AlertTriangle, Info } from "lucide-react";
+import { LoanDetailTabs } from "@/components/loans/LoanDetailTabs";
+import { LoanDetailActions } from "@/components/loans/LoanDetailActions";
+
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return { title: `${id} — LendPro` };
+}
+
+export default async function LoanDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const loan = await getLoanById(id);
+  if (!loan) notFound();
+
+  const [payments, customer, activities] = await Promise.all([getPaymentsByLoan(id), getCustomerById(loan.customerId), getActivitiesFor({ loanId: id }, 40)]);
+  const balance = calculateLoanBalance(loan, payments);
+  const status = getLoanStatus(loan, balance);
+  const schedule = getLoanSchedule(loan, payments);
+  const paidPct = loan.principal ? Math.min(100, Math.round((balance.principalPaid / loan.principal) * 100)) : 0;
+  const rateLabel = loan.interestType === "FIXED" ? `${formatCurrency(loan.interestRate)} / ${FREQ_NOUN[loan.interestFrequency]}` : `${loan.interestRate}% ${FREQ_LABEL[loan.interestFrequency]}`;
+
+  // Daily Installment plans quote one fixed collection target set at
+  // origination (principal + the FULL term's projected interest, spread
+  // evenly over every day of the term) — recomputed here from the
+  // original principal (empty payments array) so it matches what the
+  // admin was shown when the loan was created, not today's reduced
+  // balance, matching how real daily-collection loans are actually run.
+  const totalDays = daysBetween(loan.startDate, loan.dueDate);
+  const dailyPlan =
+    loan.repaymentType === "Daily Installment" && totalDays > 0
+      ? (() => {
+          const fullTermInterest = calculateInterestForLoan(loan, loan.dueDate, []);
+          const totalPayable = loan.principal + fullTermInterest;
+          const dailyAmount = totalPayable / totalDays;
+          const daysElapsed = Math.min(totalDays, Math.max(0, daysBetween(loan.startDate, new Date())));
+          const expectedByNow = dailyAmount * daysElapsed;
+          const aheadOrBehind = balance.totalPaid - expectedByNow;
+          // A missed day doesn't just vanish — it rolls forward and stacks
+          // on top of every day after it, so "catch up" is always the full
+          // cumulative gap (every missed day included), never just "yesterday".
+          const catchUpAmount = Math.max(0, -aheadOrBehind);
+          const missedDays = dailyAmount > 0 ? Math.round(catchUpAmount / dailyAmount) : 0;
+          // Projected to the due date at today's actual average daily pace —
+          // answers "will the full amount actually arrive by the due date".
+          const avgDailyPace = daysElapsed > 0 ? balance.totalPaid / daysElapsed : dailyAmount;
+          const projectedTotal = avgDailyPace * totalDays;
+          const projectedShortfall = Math.max(0, totalPayable - projectedTotal);
+          return { dailyAmount, totalDays, totalPayable, daysElapsed, expectedByNow, aheadOrBehind, catchUpAmount, missedDays, projectedTotal, projectedShortfall };
+        })()
+      : null;
+
+  return (
+    <div>
+      <div className="text-[12.5px] text-text-tertiary mb-2 flex items-center gap-1.5">
+        <Link href="/loans" className="text-primary font-medium hover:underline flex items-center gap-1">
+          <ArrowLeft className="w-3.5 h-3.5" /> Loans
+        </Link>
+        <span>›</span>
+        <span>{loan.id}</span>
+      </div>
+
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+        <div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-extrabold tracking-tight font-mono">{loan.id}</h1>
+            <StatusBadge status={status} />
+          </div>
+          <p className="text-text-secondary text-[13.5px] mt-0.5">
+            Customer:{" "}
+            <Link href={`/customers/${loan.customerId}`} className="text-primary font-semibold hover:underline">
+              {customer?.name ?? "Unknown"}
+            </Link>{" "}
+            · {customer?.phone} · Created {formatDate(loan.createdAt)}
+          </p>
+        </div>
+        <LoanDetailActions loan={loan} paymentsCount={balance.paymentsCount} status={status} />
+      </div>
+
+      {status === "OVERDUE" && (
+        <div className="flex gap-2.5 bg-danger-light text-danger-dark dark:text-red-300 rounded-[10px] px-4 py-3 text-[13px] mb-5">
+          <AlertTriangle className="w-[18px] h-[18px] shrink-0 mt-0.5" />
+          <span>
+            <strong>Overdue by {balance.daysOverdue} day{balance.daysOverdue === 1 ? "" : "s"}.</strong> Due date was {formatDate(loan.dueDate)}. Outstanding {formatCurrency(balance.totalOutstanding)}.
+          </span>
+        </div>
+      )}
+      {status === "CANCELLED" && (
+        <div className="flex gap-2.5 bg-warning-light text-warning-dark dark:text-amber-300 rounded-[10px] px-4 py-3 text-[13px] mb-5">
+          <Info className="w-[18px] h-[18px] shrink-0 mt-0.5" />
+          <span>
+            <strong>This loan is cancelled{loan.cancelledAt ? ` since ${formatDate(loan.cancelledAt)}` : ""}.</strong> Interest stopped accruing and it is excluded from outstanding totals.
+          </span>
+        </div>
+      )}
+
+      {dailyPlan && (
+        <div className="flex gap-2.5 bg-primary-50 text-primary-700 dark:text-indigo-300 rounded-[10px] px-4 py-3 text-[13px] mb-3">
+          <CalendarClock className="w-[18px] h-[18px] shrink-0 mt-0.5" />
+          <span>
+            <strong>Daily Installment plan: collect {formatCurrency(dailyPlan.dailyAmount)} every day</strong> from {formatDate(loan.startDate)} to {formatDate(loan.dueDate)} ({dailyPlan.totalDays} days) to close this loan on time —{" "}
+            {formatCurrency(loan.principal)} principal + {formatCurrency(dailyPlan.totalPayable - loan.principal)} interest = {formatCurrency(dailyPlan.totalPayable)} total, spread evenly.
+          </span>
+        </div>
+      )}
+      {dailyPlan && status !== "PAID" && status !== "CANCELLED" && (
+        <div className={`flex gap-2.5 rounded-[10px] px-4 py-3 text-[13px] mb-5 ${dailyPlan.catchUpAmount > 0 ? "bg-danger-light text-danger-dark dark:text-red-300" : "bg-success-light text-success-dark dark:text-emerald-300"}`}>
+          {dailyPlan.catchUpAmount > 0 ? <AlertTriangle className="w-[18px] h-[18px] shrink-0 mt-0.5" /> : <CheckCircle2 className="w-[18px] h-[18px] shrink-0 mt-0.5" />}
+          <span>
+            <strong>Day {dailyPlan.daysElapsed} of {dailyPlan.totalDays}.</strong>{" "}
+            {dailyPlan.catchUpAmount > 0 ? (
+              <>
+                Missed payments have rolled forward and stacked up —{" "}
+                <strong>collect {formatCurrency(dailyPlan.catchUpAmount)} now to fully catch up</strong> (≈{dailyPlan.missedDays} missed day{dailyPlan.missedDays === 1 ? "" : "s"} of {formatCurrency(dailyPlan.dailyAmount)}, not just yesterday&rsquo;s — every earlier missed day is included). Expected {formatCurrency(dailyPlan.expectedByNow)} collected by today, actually collected {formatCurrency(balance.totalPaid)}.
+              </>
+            ) : (
+              <>
+                On track — {formatCurrency(dailyPlan.aheadOrBehind)} ahead of the day-{dailyPlan.daysElapsed} target ({formatCurrency(dailyPlan.expectedByNow)} expected, {formatCurrency(balance.totalPaid)} actually collected).
+              </>
+            )}{" "}
+            {dailyPlan.daysElapsed > 0 && (
+              <>
+                At this pace, projected collection by {formatDate(loan.dueDate)} is <strong>{formatCurrency(dailyPlan.projectedTotal)}</strong>
+                {dailyPlan.projectedShortfall > 0 ? (
+                  <>
+                    {" "}
+                    — <strong>₹{Math.round(dailyPlan.projectedShortfall).toLocaleString("en-IN")} short</strong> of the {formatCurrency(dailyPlan.totalPayable)} needed to fully close this loan on time unless collections pick up.
+                  </>
+                ) : (
+                  <> — enough to fully close this loan on time.</>
+                )}
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+        <StatCard label="Original Principal" value={formatCurrency(balance.principal)} icon={Wallet} tone="primary" hint={rateLabel} />
+        <StatCard label="Interest Accrued" value={formatCurrency(balance.interestAccrued)} icon={Percent} tone="purple" hint={`${formatCurrency(balance.interestPerPeriod)} per period on current balance`} />
+        <StatCard label="Interest Paid" value={formatCurrency(balance.interestPaid)} icon={CheckCircle2} tone="success" />
+        <StatCard label="Interest Remaining" value={formatCurrency(balance.interestRemaining)} icon={Clock} tone={balance.interestRemaining > 0 ? "warning" : "success"} />
+        <StatCard label="Principal Paid" value={formatCurrency(balance.principalPaid)} icon={TrendingUp} tone="success" hint={`${paidPct}% repaid`} />
+        <StatCard label="Principal Remaining" value={formatCurrency(balance.principalRemaining)} icon={CreditCard} tone="info" />
+        <StatCard label="Total Paid" value={formatCurrency(balance.totalPaid)} icon={Wallet} tone="success" hint={`${balance.paymentsCount} payment${balance.paymentsCount === 1 ? "" : "s"}`} />
+        <StatCard
+          label="Total Outstanding"
+          value={formatCurrency(balance.totalOutstanding)}
+          icon={AlertTriangle}
+          tone={balance.totalOutstanding > 0 ? "danger" : "success"}
+          hint={balance.daysOverdue ? `${balance.daysOverdue} days overdue` : `${balance.daysActive} days active`}
+        />
+      </div>
+
+      <div className="grid lg:grid-cols-[1fr_360px] gap-5 items-start">
+        <LoanDetailTabs payments={payments} schedule={schedule} activities={activities} interestAccrued={balance.interestAccrued} />
+
+        <div className="flex flex-col gap-5">
+          <Card>
+            <div className="px-4 sm:px-[22px] py-[18px] border-b border-border">
+              <h3 className="text-[15px] font-bold">Loan Information</h3>
+            </div>
+            <div className="p-4 sm:p-[22px]">
+              <div className="flex flex-col">
+                {[
+                  ["Loan ID", loan.id],
+                  ["Amount", formatCurrency(loan.principal)],
+                  ["Interest", rateLabel],
+                  ["Interest Type", loan.interestType === "FIXED" ? "Fixed amount" : "Percentage"],
+                  ["Frequency", FREQ_LABEL[loan.interestFrequency]],
+                  ["Start Date", formatDate(loan.startDate)],
+                  ["Due Date", formatDate(loan.dueDate)],
+                  ["Repayment Type", loan.repaymentType],
+                  ["Created", formatDateTime(loan.createdAt)],
+                  ["Last Payment", balance.lastPaymentDate ? `${formatDate(balance.lastPaymentDate)} · ${formatCurrency(balance.lastPaymentAmount)}` : "—"],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-3 py-2.5 border-b border-border text-[13px] last:border-0">
+                    <span className="text-text-secondary">{k}</span>
+                    <span className={`font-semibold text-right ${k === "Due Date" && status === "OVERDUE" ? "text-danger" : ""}`}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              {loan.notes ? <div className="bg-info-light text-info-dark dark:text-sky-300 rounded-[10px] px-3.5 py-2.5 text-[13px] mt-4">{loan.notes}</div> : null}
+            </div>
+          </Card>
+          <Card>
+            <div className="p-4 sm:p-[22px]">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-text-secondary">Principal repaid</span>
+                <b>{paidPct}%</b>
+              </div>
+              <div className="h-2 bg-surface-3 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-primary to-purple rounded-full" style={{ width: `${paidPct}%` }} />
+              </div>
+              <div className="flex justify-between text-xs text-text-tertiary mt-2">
+                <span>{formatCurrency(balance.principalPaid)}</span>
+                <span>{formatCurrency(balance.principalRemaining)} left</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

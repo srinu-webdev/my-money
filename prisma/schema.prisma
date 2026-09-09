@@ -1,0 +1,176 @@
+// =====================================================================
+// LendPro — Prisma schema (PostgreSQL, hosted on Supabase)
+// Mirrors the data model from the original prototype 1:1, adapted for
+// a relational DB: proper foreign keys + cascading deletes for the
+// business rules already established (delete customer -> their loans
+// and payments go too; delete loan -> its payments go too).
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 is "Rust-free": the connection URL lives in prisma.config.ts
+// (used by the CLI for migrate/db push) and, separately, in the driver
+// adapter passed to `new PrismaClient({ adapter })` at runtime — see
+// src/lib/db.ts. Nothing DB-connection-related belongs here anymore.
+datasource db {
+  provider = "postgresql"
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InterestType {
+  PERCENTAGE
+  FIXED
+}
+
+enum InterestFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+// Overdue / Partially Paid are DERIVED at read time from payments vs.
+// due date — they are never stored. Only these three are persisted.
+enum LoanStatus {
+  ACTIVE
+  PAID
+  CANCELLED
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  phone        String?
+  avatar       String?  @db.Text
+  role         String   @default("Administrator")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Counter {
+  // Composite key e.g. "customer_2026" -> atomic per-year sequence used
+  // to generate CUS-2026-0001 / LN-2026-0001 / PAY-2026-0001 style ids.
+  key   String @id
+  value Int    @default(0)
+}
+
+model Customer {
+  id         String         @id
+  name       String
+  phone      String
+  email      String?
+  address    String?
+  city       String?
+  state      String?
+  postalCode String?
+  notes      String?
+  status     CustomerStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  loans    Loan[]
+  payments Payment[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Loan {
+  id                String            @id
+  customerId        String
+  customer          Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  principal         Decimal           @db.Decimal(14, 2)
+  interestRate      Decimal           @db.Decimal(10, 4)
+  interestType      InterestType
+  interestFrequency InterestFrequency
+  startDate         DateTime          @db.Date
+  dueDate           DateTime          @db.Date
+  repaymentType     String
+  status            LoanStatus        @default(ACTIVE)
+  cancelledAt       DateTime?         @db.Date
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  payments Payment[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model Payment {
+  id              String   @id
+  loanId          String
+  loan            Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  amount          Decimal  @db.Decimal(14, 2)
+  interestAmount  Decimal  @db.Decimal(14, 2)
+  principalAmount Decimal  @db.Decimal(14, 2)
+  paymentMethod   String
+  paymentDate     DateTime @db.Date
+  reference       String?
+  notes           String?
+  recordedBy      String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([loanId])
+  @@index([customerId])
+  @@index([paymentDate])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([read])
+  @@index([createdAt])
+}
+
+// Soft references only (plain id strings, no FK) — an activity entry is
+// an immutable audit log line and must survive the record it describes
+// being edited or deleted later.
+model Activity {
+  id          String   @id @default(cuid())
+  type        String
+  description String
+  customerId  String?
+  loanId      String?
+  paymentId   String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([loanId])
+}
+
+// Singleton row (id is always 1) holding business configuration.
+model Settings {
+  id                   Int               @id @default(1)
+  businessName         String
+  businessPhone        String
+  businessEmail        String
+  businessAddress      String
+  currency             String            @default("INR")
+  dateFormat           String            @default("DD/MM/YYYY")
+  defaultInterestRate  Decimal           @db.Decimal(10, 4)
+  defaultInterestType  InterestType
+  defaultFrequency     InterestFrequency
+  defaultRepaymentType String
+  defaultPaymentMethod String
+  dueReminder          Boolean           @default(true)
+  overdueReminder      Boolean           @default(true)
+}

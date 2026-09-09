@@ -1,0 +1,48 @@
+import { cn } from "@/lib/cn";
+
+export interface TabItem {
+  key: string;
+  label: string;
+}
+
+// Deliberately not "use client": these are pure, controlled components —
+// the parent (always a Client Component, since it owns the active-tab
+// state) supplies `onChange`, so no hooks are needed here.
+
+export function Tabs({ tabs, active, onChange }: { tabs: TabItem[]; active: string; onChange: (key: string) => void }) {
+  return (
+    <div className="flex gap-1 border-b border-border px-[22px] overflow-x-auto">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={cn(
+            "px-3.5 py-3 font-semibold text-[13.5px] border-b-2 -mb-px whitespace-nowrap transition-colors",
+            active === t.key ? "text-primary border-primary" : "text-text-secondary border-transparent hover:text-text"
+          )}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function PillTabs({ tabs, active, onChange }: { tabs: TabItem[]; active: string; onChange: (key: string) => void }) {
+  return (
+    <div className="inline-flex gap-1 bg-surface-3 p-1 rounded-[10px] flex-wrap">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={cn(
+            "px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-all",
+            active === t.key ? "bg-surface text-text shadow-card-sm" : "text-text-secondary hover:text-text"
+          )}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
