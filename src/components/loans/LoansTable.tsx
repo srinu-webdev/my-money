@@ -158,7 +158,6 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                   <Th>Interest This Month</Th>
                   <Th>Paid This Month</Th>
                   <Th>Principal Paid</Th>
-                  <Th>Principal Remaining</Th>
                   <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} />
                   <Th>Status</Th>
                   <Th />
@@ -201,7 +200,6 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                         {formatCurrency(b.interestPaidThisPeriod)}
                       </Td>
                       <Td className="text-success-dark">{formatCurrency(b.principalPaid)}</Td>
-                      <Td>{formatCurrency(b.principalRemaining)}</Td>
                       <Td className={`font-semibold ${b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
                       <Td>
                         <StatusBadge status={l.derivedStatus} />

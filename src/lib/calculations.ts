@@ -11,7 +11,8 @@
 //   • "FIXED" rate      -> a flat ₹ amount per period regardless of the
 //     principal balance (until the principal is fully repaid).
 //   • Frequency defines the period length: daily=1d, weekly=7d,
-//     monthly=30d, yearly=365d. A period that has FULLY ELAPSED is owed
+//     monthly=one real calendar month (anchored to the start date's
+//     day-of-month, 28-31 days), yearly=365d. A period that has FULLY ELAPSED is owed
 //     in full, no discount for early payment within it — a completed
 //     month's ₹2,000 stays ₹2,000 whether it's paid on day 31 or day 45.
 //     But the CURRENTLY IN-PROGRESS period (the one still running right
@@ -78,9 +79,45 @@ function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 // How many periods have FULLY completed — 29 days into a 30-day period
-// is still 0 complete periods, 30 days in is 1, 31-59 is still 1.
+// is still 0 complete periods, 30 days in is 1, 31-59 is still 1. Used
+// for DAILY/WEEKLY/YEARLY frequencies, where a period is a fixed number
+// of days.
 function periodsCompleted(days: number, periodDays: number): number {
   return days > 0 ? Math.floor(days / periodDays) : 0;
+}
+
+// MONTHLY frequency uses REAL calendar months anchored to a specific
+// day-of-month (the day the loan's money changed hands), not a rigid 30-day block —
+// a month is 28-31 days depending which one it is, and a loan taken on
+// the 10th is due on the 10th of the next calendar month, not "30 days
+// later" (which lands on the 9th for a 31-day month like August, a day
+// early). Returns how many full collection cycles have completed by
+// `asOf`, the boundary date the most recent one completed on (= the
+// start of the period still running), and that in-progress period's
+// actual length in days (needed to prorate today's partial share —
+// never a fixed 30, since real months vary).
+function monthlyPeriodInfo(firstDate: Date, asOf: Date, anchorDay: number): { count: number; lastBoundary: Date; currentPeriodLengthDays: number } {
+  const startY = firstDate.getFullYear();
+  const startM = firstDate.getMonth();
+  let count = 0;
+  let lastBoundary = firstDate;
+  let nextBoundary = firstDate;
+  for (let i = 0; i <= 1200; i++) {
+    const y = startY;
+    const m = startM + i;
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const candidate = new Date(y, m, Math.min(anchorDay, daysInMonth));
+    if (candidate <= firstDate) continue; // this occurrence is at/before the period even started
+    if (candidate <= asOf) {
+      count++;
+      lastBoundary = candidate;
+      continue;
+    }
+    nextBoundary = candidate;
+    break;
+  }
+  const currentPeriodLengthDays = Math.max(1, Math.round((nextBoundary.getTime() - lastBoundary.getTime()) / 86400000));
+  return { count, lastBoundary, currentPeriodLengthDays };
 }
 function sum<T>(arr: T[], fn: (x: T) => number): number {
   return arr.reduce((s, x) => s + (Number(fn(x)) || 0), 0);
@@ -118,6 +155,15 @@ export function calculateInterestBreakdown(
 
   const rate = Number(loan.interestRate) || 0;
   const periodDays = FREQUENCY_DAYS[loan.interestFrequency] || 30;
+  const isMonthly = loan.interestFrequency === "MONTHLY";
+  // Accrual anchors to the day the money actually changed hands — NOT
+  // loan.collectionDay. The collection day is only when the lender goes
+  // to collect (due-date display, Due Payments list, reminder cron); if
+  // it also moved the accrual boundaries, overriding a loan started on
+  // the 10th to "collect on the 15th" would re-carve its history into a
+  // 5-day stub charged as a whole month, rewriting cycles the customer
+  // has already settled.
+  const anchorDay = parseDate(loan.startDate).getDate();
 
   // One merged, chronological timeline: disbursements raise the accruing
   // balance, principal repayments lower it. A pure interest payment
@@ -145,7 +191,7 @@ export function calculateInterestBreakdown(
   let periodsCharged = 0;
   const accrueWholeSegment = (segEnd: Date) => {
     if (segEnd <= segStart) return;
-    const totalPeriods = periodsCompleted(daysBetween(firstDate, segEnd), periodDays);
+    const totalPeriods = isMonthly ? monthlyPeriodInfo(firstDate, segEnd, anchorDay).count : periodsCompleted(daysBetween(firstDate, segEnd), periodDays);
     const newPeriods = Math.max(0, totalPeriods - periodsCharged);
     if (newPeriods > 0 && bal > 0) {
       whole += loan.interestType === "FIXED" ? rate * newPeriods : bal * (rate / 100) * newPeriods;
@@ -171,15 +217,30 @@ export function calculateInterestBreakdown(
 
   // The period still in progress (since the last completed boundary)
   // accrues continuously at today's balance — never a lump full-period
-  // charge on day one.
-  const daysIntoCurrentPeriod = daysBetween(firstDate, asOf) - periodsCharged * periodDays;
+  // charge on day one. For MONTHLY loans this uses the CURRENT period's
+  // real length (28-31 days, whatever that calendar month actually is),
+  // not a fixed 30 — a day into a 31-day month is a smaller fraction
+  // than a day into February.
+  let daysIntoCurrentPeriod: number;
+  let currentPeriodLength: number;
+  let periodStartDate: Date;
+  if (isMonthly) {
+    const info = monthlyPeriodInfo(firstDate, asOf, anchorDay);
+    periodStartDate = info.lastBoundary;
+    daysIntoCurrentPeriod = daysBetween(info.lastBoundary, asOf);
+    currentPeriodLength = info.currentPeriodLengthDays;
+  } else {
+    periodStartDate = addDays(firstDate, periodsCharged * periodDays);
+    daysIntoCurrentPeriod = daysBetween(firstDate, asOf) - periodsCharged * periodDays;
+    currentPeriodLength = periodDays;
+  }
   let fractional = 0;
   if (daysIntoCurrentPeriod > 0 && bal > 0) {
-    const fraction = daysIntoCurrentPeriod / periodDays;
+    const fraction = daysIntoCurrentPeriod / currentPeriodLength;
     fractional = loan.interestType === "FIXED" ? rate * fraction : bal * (rate / 100) * fraction;
   }
 
-  const currentPeriodStart = toISODate(addDays(firstDate, periodsCharged * periodDays));
+  const currentPeriodStart = toISODate(periodStartDate);
   return { total: Math.max(0, round2(whole + fractional)), whole: Math.max(0, round2(whole)), currentPeriodStart };
 }
 
@@ -353,6 +414,15 @@ export interface LoanScheduleSegment {
 export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: string | Date, disbursements?: Disbursement[]): LoanScheduleSegment[] {
   const periodDays = FREQUENCY_DAYS[loan.interestFrequency] || 30;
   const rate = Number(loan.interestRate) || 0;
+  const isMonthly = loan.interestFrequency === "MONTHLY";
+  // Accrual anchors to the day the money actually changed hands — NOT
+  // loan.collectionDay. The collection day is only when the lender goes
+  // to collect (due-date display, Due Payments list, reminder cron); if
+  // it also moved the accrual boundaries, overriding a loan started on
+  // the 10th to "collect on the 15th" would re-carve its history into a
+  // 5-day stub charged as a whole month, rewriting cycles the customer
+  // has already settled.
+  const anchorDay = parseDate(loan.startDate).getDate();
   const segments: LoanScheduleSegment[] = [];
 
   // Same exclusion as calculateInterestForLoan: a pure interest payment
@@ -376,14 +446,14 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
 
   const push = (end: Date, event: string) => {
     if (end <= segStart) return;
-    const totalPeriods = periodsCompleted(daysBetween(firstDate, end), periodDays);
+    const totalPeriods = isMonthly ? monthlyPeriodInfo(firstDate, end, anchorDay).count : periodsCompleted(daysBetween(firstDate, end), periodDays);
     const periods = Math.max(0, totalPeriods - periodsCharged);
     if (principal > 0 && periods > 0) {
       // Show the row ending at the actual period boundary reached, not
       // at whatever `end` was passed (which for the final call is
       // "today") — otherwise this row's date range would visually
       // overlap the separate "still accruing" row that follows it.
-      const boundaryEnd = addDays(firstDate, totalPeriods * periodDays);
+      const boundaryEnd = isMonthly ? monthlyPeriodInfo(firstDate, end, anchorDay).lastBoundary : addDays(firstDate, totalPeriods * periodDays);
       const days = daysBetween(segStart, boundaryEnd);
       const interest = loan.interestType === "FIXED" ? rate * periods : (principal * rate * periods) / 100;
       segments.push({ from: toISODate(segStart), to: toISODate(boundaryEnd), days, periods, principal, interest: round2(interest), event });
@@ -405,12 +475,25 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
 
   // The period still running right now accrues gradually — shown as its
   // own row, distinct from the completed-period rows above, so it never
-  // reads as "another full month owed" before it actually is one.
-  const daysIntoCurrentPeriod = daysBetween(firstDate, now) - periodsCharged * periodDays;
+  // reads as "another full month owed" before it actually is one. For
+  // MONTHLY loans this uses the current calendar month's real length
+  // (28-31 days), not a fixed 30.
+  let daysIntoCurrentPeriod: number;
+  let currentPeriodLength: number;
+  let boundaryStart: Date;
+  if (isMonthly) {
+    const info = monthlyPeriodInfo(firstDate, now, anchorDay);
+    boundaryStart = info.lastBoundary;
+    daysIntoCurrentPeriod = daysBetween(info.lastBoundary, now);
+    currentPeriodLength = info.currentPeriodLengthDays;
+  } else {
+    boundaryStart = addDays(firstDate, periodsCharged * periodDays);
+    daysIntoCurrentPeriod = daysBetween(firstDate, now) - periodsCharged * periodDays;
+    currentPeriodLength = periodDays;
+  }
   if (daysIntoCurrentPeriod > 0 && principal > 0) {
-    const fraction = daysIntoCurrentPeriod / periodDays;
+    const fraction = daysIntoCurrentPeriod / currentPeriodLength;
     const interest = loan.interestType === "FIXED" ? rate * fraction : (principal * rate * fraction) / 100;
-    const boundaryStart = addDays(firstDate, periodsCharged * periodDays);
     segments.push({
       from: toISODate(boundaryStart),
       to: toISODate(now),
