@@ -8,6 +8,7 @@ import { StatusBadge, Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Table, TableWrap, Th, Td } from "@/components/ui/Table";
 import { ActivityList } from "@/components/dashboard/ActivityList";
+import { CustomerPaymentCalendar } from "./CustomerPaymentCalendar";
 import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/dates";
 import { FREQ_LABEL } from "@/lib/calculations";
@@ -27,6 +28,7 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
           { key: "overview", label: "Overview" },
           { key: "loans", label: `Loans (${loans.length})` },
           { key: "payments", label: "Payments" },
+          { key: "calendar", label: "Calendar" },
           { key: "interest", label: "Interest" },
           { key: "activity", label: "Activity" },
         ]}
@@ -181,6 +183,8 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
         ) : (
           <EmptyState icon={Wallet} title="No payments yet" text="Payments recorded against this customer will appear here." />
         ))}
+
+      {tab === "calendar" && <CustomerPaymentCalendar loans={loans} payments={payments} />}
 
       {tab === "interest" &&
         (loans.length ? (
