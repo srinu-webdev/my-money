@@ -155,7 +155,12 @@ export function calculateInterestBreakdown(
       bal = Math.max(0, bal + ev.delta);
       continue;
     }
-    if (ev.date >= asOf) break;
+    // A payment/disbursement dated TODAY has already happened by the time
+    // we're asking "how much is owed as of today" — matching getLoanSchedule
+    // below (strict `>`, not `>=`). Excluding same-day events here caused a
+    // paid-off loan to keep accruing a phantom fractional amount on its old
+    // balance for the rest of the day it was actually settled.
+    if (ev.date > asOf) break;
     accrueWholeSegment(ev.date);
     bal = Math.max(0, bal + ev.delta);
     segStart = ev.date;
