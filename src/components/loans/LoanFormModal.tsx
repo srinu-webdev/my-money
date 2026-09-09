@@ -99,9 +99,11 @@ function LoanFormContent({
     // everyone, and never hardcode a percentage anywhere downstream.
     const perPeriod = interestType === "FIXED" ? r : (p * r) / 100;
     const days = startDate && dueDate ? daysBetween(startDate, dueDate) : 0;
-    // A full period is owed the moment any part of it has elapsed (see
-    // calculations.ts's periodsOwed) — round up, don't prorate, so this
-    // projection matches what the loan will actually accrue.
+    // Worst-case projection to the due date, rounded up to whole periods
+    // — the live engine (calculations.ts) is more precise (a completed
+    // period is owed in full, the one still running accrues gradually),
+    // but by the due date the term has almost always completed every
+    // period anyway, so this stays a fair "what you'll owe by then" estimate.
     const periods = days > 0 ? Math.ceil(days / FREQUENCY_DAYS[interestFrequency]) : 0;
     return { perPeriod, days, periods, total: p + perPeriod * periods };
   }, [principal, interestRate, interestType, interestFrequency, startDate, dueDate]);
@@ -284,7 +286,7 @@ function LoanFormContent({
                 </div>
                 {interestFrequency !== "DAILY" ? (
                   <div className="text-xs mt-1.5 opacity-70">
-                    A {freqWord} is owed in full the moment it starts — e.g. on day 1 of a new {freqWord} the customer already owes the whole {formatCurrency(preview.perPeriod)}, not a fraction of it.
+                    Interest builds up gradually through each {freqWord} — once a {freqWord} fully completes unpaid, the whole {formatCurrency(preview.perPeriod)} for it is locked in (no discount for paying late within it), and a fresh {freqWord} starts accruing from there.
                   </div>
                 ) : null}
                 {repaymentNote ? <div className="text-xs mt-2 pt-2 border-t border-primary-200/60 leading-relaxed">{repaymentNote}</div> : null}

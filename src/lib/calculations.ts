@@ -11,16 +11,18 @@
 //   • "FIXED" rate      -> a flat ₹ amount per period regardless of the
 //     principal balance (until the principal is fully repaid).
 //   • Frequency defines the period length: daily=1d, weekly=7d,
-//     monthly=30d, yearly=365d. A period is owed in full the moment ANY
-//     part of it has elapsed — matching how local lending businesses
-//     actually charge "monthly interest" (a flat sum due for the month,
-//     not a bank-style daily-prorated fraction). Taking a ₹40,000 loan
-//     at 5%/month means the full ₹2,000 is owed from day one of that
-//     month, whether the borrower repays on day 2 or day 29 — it never
-//     shows a fraction like ₹200 for "only 3 days in." The same rounding
-//     applies to every later period and to every balance-reducing
-//     segment (a partial payment still leaves at least one full period's
-//     interest owed on whatever remains, never a partial-period credit).
+//     monthly=30d, yearly=365d. A period that has FULLY ELAPSED is owed
+//     in full, no discount for early payment within it — a completed
+//     month's ₹2,000 stays ₹2,000 whether it's paid on day 31 or day 45.
+//     But the CURRENTLY IN-PROGRESS period (the one still running right
+//     now) accrues gradually, day by day, same as it always has — a loan
+//     taken 3 days ago owes a small growing slice of a month, not the
+//     whole month's rate on day one. So "Interest Accrued" is always
+//     (every fully-completed period, each at its full rate) + (today's
+//     running share of the period still in progress). The same rounding
+//     applies to every balance-reducing segment (a partial payment still
+//     leaves any already-completed period's interest owed on whatever
+//     remained during it, never a partial-period credit).
 //   • Accrual stops once the outstanding principal reaches zero, or the
 //     loan is cancelled (accrual is capped at `cancelledAt`).
 //   • Interest is never negative.
@@ -35,7 +37,7 @@
 // as before — the full principal is treated as handed over on the start
 // date.
 // =====================================================================
-import { daysBetween, parseDate, startOfDay } from "./dates";
+import { addDays, daysBetween, parseDate, startOfDay, toISODate } from "./dates";
 import type {
   AllocationMode,
   CustomerSummary,
@@ -75,11 +77,10 @@ export const FREQ_NOUN: Record<InterestFrequency, string> = {
 function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
-// Any elapsed time within a period counts as that whole period being
-// owed — 1 day into a 30-day month is still 1 full period, 31 days in
-// is 2. Zero elapsed days owes nothing (same-day, nothing has started).
-function periodsOwed(days: number, periodDays: number): number {
-  return days > 0 ? Math.ceil(days / periodDays) : 0;
+// How many periods have FULLY completed — 29 days into a 30-day period
+// is still 0 complete periods, 30 days in is 1, 31-59 is still 1.
+function periodsCompleted(days: number, periodDays: number): number {
+  return days > 0 ? Math.floor(days / periodDays) : 0;
 }
 function sum<T>(arr: T[], fn: (x: T) => number): number {
   return arr.reduce((s, x) => s + (Number(fn(x)) || 0), 0);
@@ -94,12 +95,19 @@ function effectiveDisbursements(loan: Pick<Loan, "principal" | "startDate">, dis
   return [{ date: loan.startDate, amount: loan.principal }];
 }
 
-export function calculateInterestForLoan(
+export interface InterestBreakdown {
+  /** Every fully-completed period's interest, plus today's running share of whatever period is still in progress — this is "Interest Accrued" everywhere. */
+  total: number;
+  /** Just the fully-completed-and-still-unpaid-period portion of `total` — used to tell "N whole months genuinely pending" apart from today's still-growing partial-period slice, which isn't a missed/overdue month yet. */
+  whole: number;
+}
+
+export function calculateInterestBreakdown(
   loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt">,
   asOfDate: string | Date,
   payments: PaymentLike[],
   disbursements?: DisbursementLike[]
-): number {
+): InterestBreakdown {
   let asOf = startOfDay(asOfDate);
   if (loan.status === "CANCELLED" && loan.cancelledAt) {
     const c = startOfDay(loan.cancelledAt);
@@ -113,7 +121,7 @@ export function calculateInterestForLoan(
   // balance, principal repayments lower it. A pure interest payment
   // (principalAmount 0) doesn't touch the balance, so it's excluded here —
   // otherwise it would split an ongoing period into two pieces that each
-  // get independently rounded up, inflating the total (recording that an
+  // get independently charged, inflating the total (recording that an
   // interest payment was made should never itself increase how much
   // interest the loan shows as owed).
   const events = [
@@ -122,23 +130,23 @@ export function calculateInterestForLoan(
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
-  if (asOf <= firstDate) return 0;
+  if (asOf <= firstDate) return { total: 0, whole: 0 };
 
   let segStart = firstDate;
   let bal = 0;
-  let interest = 0;
-  // Periods are counted GLOBALLY from firstDate, never reset per segment —
-  // each segment is only charged for whatever NEW whole periods its own
-  // end newly crosses into (at that segment's own balance), so splitting
-  // the timeline at a balance-changing event can never double-charge a
-  // period that was already underway.
+  let whole = 0;
+  // Whole-completed-periods are counted GLOBALLY from firstDate, never
+  // reset per segment — each segment is only charged for whatever NEW
+  // whole periods its own end newly completes (at that segment's own
+  // balance), so splitting the timeline at a balance-changing event can
+  // never double-charge a period that was already complete.
   let periodsCharged = 0;
-  const accrueSegment = (segEnd: Date) => {
+  const accrueWholeSegment = (segEnd: Date) => {
     if (segEnd <= segStart) return;
-    const totalPeriods = periodsOwed(daysBetween(firstDate, segEnd), periodDays);
+    const totalPeriods = periodsCompleted(daysBetween(firstDate, segEnd), periodDays);
     const newPeriods = Math.max(0, totalPeriods - periodsCharged);
     if (newPeriods > 0 && bal > 0) {
-      interest += loan.interestType === "FIXED" ? rate * newPeriods : bal * (rate / 100) * newPeriods;
+      whole += loan.interestType === "FIXED" ? rate * newPeriods : bal * (rate / 100) * newPeriods;
     }
     periodsCharged = totalPeriods;
   };
@@ -148,12 +156,32 @@ export function calculateInterestForLoan(
       continue;
     }
     if (ev.date >= asOf) break;
-    accrueSegment(ev.date);
+    accrueWholeSegment(ev.date);
     bal = Math.max(0, bal + ev.delta);
     segStart = ev.date;
   }
-  accrueSegment(asOf);
-  return Math.max(0, round2(interest));
+  accrueWholeSegment(asOf);
+
+  // The period still in progress (since the last completed boundary)
+  // accrues continuously at today's balance — never a lump full-period
+  // charge on day one.
+  const daysIntoCurrentPeriod = daysBetween(firstDate, asOf) - periodsCharged * periodDays;
+  let fractional = 0;
+  if (daysIntoCurrentPeriod > 0 && bal > 0) {
+    const fraction = daysIntoCurrentPeriod / periodDays;
+    fractional = loan.interestType === "FIXED" ? rate * fraction : bal * (rate / 100) * fraction;
+  }
+
+  return { total: Math.max(0, round2(whole + fractional)), whole: Math.max(0, round2(whole)) };
+}
+
+export function calculateInterestForLoan(
+  loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt">,
+  asOfDate: string | Date,
+  payments: PaymentLike[],
+  disbursements?: DisbursementLike[]
+): number {
+  return calculateInterestBreakdown(loan, asOfDate, payments, disbursements).total;
 }
 
 export function interestPerPeriod(
@@ -173,8 +201,13 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
   // What's owed is measured against what's actually been handed over, not
   // the full agreed amount — money not yet disbursed isn't debt yet.
   const principalRemaining = Math.max(0, round2(totalDisbursed - principalPaid));
-  const interestAccrued = calculateInterestForLoan(loan, asOfDate ?? new Date(), payments, disbursements);
+  const breakdown = calculateInterestBreakdown(loan, asOfDate ?? new Date(), payments, disbursements);
+  const interestAccrued = breakdown.total;
   const interestRemaining = Math.max(0, round2(interestAccrued - interestPaid));
+  // Payments are assumed to settle the oldest debt first (completed
+  // periods before today's still-growing partial one) — the natural,
+  // sensible order, and matches how interest allocation already works.
+  const interestPendingWhole = Math.max(0, round2(breakdown.whole - interestPaid));
   const totalPaid = round2(principalPaid + interestPaid);
   const totalOutstanding = round2(principalRemaining + interestRemaining);
   const sorted = [...payments].sort(
@@ -199,6 +232,7 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
     interestPerPeriod: interestPerPeriod(loan, principalRemaining),
     totalDisbursed,
     pendingDisbursement,
+    interestPendingWhole,
   };
 }
 
@@ -292,19 +326,24 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
   const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
   let segStart = firstDate;
   let principal = 0;
-  // Same global, monotonic period counter as calculateInterestForLoan —
-  // see that function's comment for why a per-segment ceiling would
-  // double-count.
+  // Same global, monotonic whole-period counter as calculateInterestBreakdown
+  // — see that function's comment for why a per-segment count would
+  // double-charge, and why only FULLY completed periods count here.
   let periodsCharged = 0;
 
   const push = (end: Date, event: string) => {
     if (end <= segStart) return;
-    const totalPeriods = periodsOwed(daysBetween(firstDate, end), periodDays);
+    const totalPeriods = periodsCompleted(daysBetween(firstDate, end), periodDays);
     const periods = Math.max(0, totalPeriods - periodsCharged);
-    if (principal > 0) {
-      const days = daysBetween(segStart, end);
+    if (principal > 0 && periods > 0) {
+      // Show the row ending at the actual period boundary reached, not
+      // at whatever `end` was passed (which for the final call is
+      // "today") — otherwise this row's date range would visually
+      // overlap the separate "still accruing" row that follows it.
+      const boundaryEnd = addDays(firstDate, totalPeriods * periodDays);
+      const days = daysBetween(segStart, boundaryEnd);
       const interest = loan.interestType === "FIXED" ? rate * periods : (principal * rate * periods) / 100;
-      segments.push({ from: segStart.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10), days, periods, principal, interest: round2(interest), event });
+      segments.push({ from: toISODate(segStart), to: toISODate(boundaryEnd), days, periods, principal, interest: round2(interest), event });
     }
     periodsCharged = totalPeriods;
   };
@@ -319,7 +358,27 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
     principal = Math.max(0, principal + ev.delta);
     segStart = ev.date;
   }
-  push(now, "Accruing (today)");
+  push(now, "Period completed");
+
+  // The period still running right now accrues gradually — shown as its
+  // own row, distinct from the completed-period rows above, so it never
+  // reads as "another full month owed" before it actually is one.
+  const daysIntoCurrentPeriod = daysBetween(firstDate, now) - periodsCharged * periodDays;
+  if (daysIntoCurrentPeriod > 0 && principal > 0) {
+    const fraction = daysIntoCurrentPeriod / periodDays;
+    const interest = loan.interestType === "FIXED" ? rate * fraction : (principal * rate * fraction) / 100;
+    const boundaryStart = addDays(firstDate, periodsCharged * periodDays);
+    segments.push({
+      from: toISODate(boundaryStart),
+      to: toISODate(now),
+      days: daysIntoCurrentPeriod,
+      periods: 0,
+      principal,
+      interest: round2(interest),
+      event: "Current period accruing (not yet complete)",
+    });
+  }
+
   return segments;
 }
 

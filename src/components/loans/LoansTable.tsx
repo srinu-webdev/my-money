@@ -19,7 +19,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { usePagination, useSort } from "@/lib/hooks/useTableState";
 import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/dates";
-import { FREQ_LABEL, STATUS_LABEL } from "@/lib/calculations";
+import { FREQ_LABEL, FREQ_NOUN, STATUS_LABEL } from "@/lib/calculations";
 import type { LoanRow } from "@/lib/queries";
 import type { LoanStatus } from "@/lib/types";
 import { cancelLoanAction, closeLoanAction, deleteLoanAction, reactivateLoanAction } from "@/lib/actions/loans";
@@ -189,10 +189,12 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                       <Td className="text-text-secondary">{formatDate(l.startDate)}</Td>
                       <Td>
                         {formatCurrency(b.interestAccrued)}
-                        {b.interestPerPeriod > 0 && b.interestRemaining > 0 ? (
+                        {b.interestPendingWhole > 0.01 ? (
                           <div className="text-xs font-normal text-warning-dark">
-                            {Math.round(b.interestRemaining / b.interestPerPeriod)} month{Math.round(b.interestRemaining / b.interestPerPeriod) === 1 ? "" : "s"} pending · {formatCurrency(b.interestRemaining)}
+                            {Math.round(b.interestPendingWhole / b.interestPerPeriod)} month{Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1 ? "" : "s"} pending · {formatCurrency(b.interestPendingWhole)}
                           </div>
+                        ) : b.interestRemaining > 0.01 ? (
+                          <div className="text-xs font-normal text-text-tertiary">accruing this {FREQ_NOUN[l.interestFrequency]} · {formatCurrency(b.interestRemaining)}</div>
                         ) : b.interestAccrued > 0 ? (
                           <div className="text-xs font-normal text-success-dark">Interest fully paid</div>
                         ) : null}

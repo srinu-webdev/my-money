@@ -139,6 +139,11 @@ export interface LoanBalance {
   interestPerPeriod: number;
   totalDisbursed: number; // sum of disbursement rows — what's actually been handed over so far
   pendingDisbursement: number; // agreed principal not yet disbursed (0 for the common single-handover loan)
+  // Of `interestRemaining`, how much is genuinely a FULLY-COMPLETED,
+  // still-unpaid period — excludes today's still-growing partial-period
+  // share, so "N months pending" never counts a period that hasn't
+  // actually finished yet (a loan taken 3 days ago shows 0 here).
+  interestPendingWhole: number;
 }
 
 export interface LoanWithBalance extends Loan {

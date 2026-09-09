@@ -11,7 +11,7 @@ import { ActivityList } from "@/components/dashboard/ActivityList";
 import { CustomerPaymentCalendar } from "./CustomerPaymentCalendar";
 import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/dates";
-import { FREQ_LABEL } from "@/lib/calculations";
+import { FREQ_LABEL, FREQ_NOUN } from "@/lib/calculations";
 import type { CustomerRow, LoanRow } from "@/lib/queries";
 import type { Activity, Payment } from "@/lib/types";
 import { CreditCard, Percent, Wallet } from "lucide-react";
@@ -213,10 +213,14 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                     <Td>{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
                     <Td>
                       {formatCurrency(l.balance.interestAccrued)}
-                      {l.balance.interestPerPeriod > 0 && l.balance.interestAccrued > 0 ? (
-                        <div className="text-xs font-normal text-text-tertiary">
-                          ≈{Math.round(l.balance.interestAccrued / l.balance.interestPerPeriod)} full period{Math.round(l.balance.interestAccrued / l.balance.interestPerPeriod) === 1 ? "" : "s"} owed
+                      {l.balance.interestPendingWhole > 0.01 ? (
+                        <div className="text-xs font-normal text-warning-dark">
+                          {Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod)} month{Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod) === 1 ? "" : "s"} pending
                         </div>
+                      ) : l.balance.interestRemaining > 0.01 ? (
+                        <div className="text-xs font-normal text-text-tertiary">accruing this {FREQ_NOUN[l.interestFrequency]}</div>
+                      ) : l.balance.interestAccrued > 0 ? (
+                        <div className="text-xs font-normal text-success-dark">fully paid</div>
                       ) : null}
                     </Td>
                     <Td className="text-success-dark">{formatCurrency(l.balance.interestPaid)}</Td>

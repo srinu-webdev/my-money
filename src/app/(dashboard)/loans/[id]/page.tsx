@@ -175,7 +175,19 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         />
         <StatCard label="Interest Accrued" value={formatCurrency(balance.interestAccrued)} icon={Percent} tone="purple" hint={`${formatCurrency(balance.interestPerPeriod)} per period on current balance`} />
         <StatCard label="Interest Paid" value={formatCurrency(balance.interestPaid)} icon={CheckCircle2} tone="success" />
-        <StatCard label="Interest Remaining" value={formatCurrency(balance.interestRemaining)} icon={Clock} tone={balance.interestRemaining > 0 ? "warning" : "success"} />
+        <StatCard
+          label="Interest Remaining"
+          value={formatCurrency(balance.interestRemaining)}
+          icon={Clock}
+          tone={balance.interestRemaining > 0 ? "warning" : "success"}
+          hint={
+            balance.interestPendingWhole > 0.01
+              ? `${formatCurrency(balance.interestPendingWhole)} in fully-completed period(s), rest still accruing`
+              : balance.interestRemaining > 0.01
+                ? `still accruing this ${FREQ_NOUN[loan.interestFrequency]} — no full period pending yet`
+                : undefined
+          }
+        />
         <StatCard label="Principal Paid" value={formatCurrency(balance.principalPaid)} icon={TrendingUp} tone="success" hint={`${paidPct}% repaid`} />
         <StatCard label="Principal Remaining" value={formatCurrency(balance.principalRemaining)} icon={CreditCard} tone="info" />
         <StatCard label="Total Paid" value={formatCurrency(balance.totalPaid)} icon={Wallet} tone="success" hint={`${balance.paymentsCount} payment${balance.paymentsCount === 1 ? "" : "s"}`} />
