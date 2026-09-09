@@ -273,13 +273,17 @@ export function interestPerPeriod(
 export function nextMonthlyCollectionDate(startDateIso: string, asOfDate?: string | Date, collectionDayOverride?: number | null): { date: string; daysUntil: number } {
   const dueDay = collectionDayOverride ?? parseDate(startDateIso).getDate();
   const t0 = startOfDay(asOfDate ?? new Date());
+  const start = startOfDay(startDateIso);
   const y = t0.getFullYear();
   const m = t0.getMonth();
-  const clampedThisMonth = Math.min(dueDay, new Date(y, m + 1, 0).getDate());
-  let candidate = new Date(y, m, clampedThisMonth);
-  if (candidate < t0) {
-    const clampedNextMonth = Math.min(dueDay, new Date(y, m + 2, 0).getDate());
-    candidate = new Date(y, m + 1, clampedNextMonth);
+  let candidate = new Date(y, m, Math.min(dueDay, new Date(y, m + 1, 0).getDate()));
+  // Roll forward until the occurrence is both not in the past AND strictly
+  // after the loan's start date. A loan given today must be first due NEXT
+  // month, not today — same guard the accrual engine (monthlyPeriodInfo)
+  // already applies. Still returns today when today genuinely IS an
+  // ongoing loan's collection day.
+  for (let k = 1; k <= 24 && (candidate < t0 || candidate <= start); k++) {
+    candidate = new Date(y, m + k, Math.min(dueDay, new Date(y, m + k + 1, 0).getDate()));
   }
   const daysUntil = Math.round((candidate.getTime() - t0.getTime()) / 86400000);
   return { date: toISODate(candidate), daysUntil };
