@@ -61,7 +61,7 @@ export function LoanDetailTabs({ payments, schedule, activities, interestAccrued
                       <Td>{formatDate(s.from)}</Td>
                       <Td>{formatDate(s.to)}</Td>
                       <Td>
-                        {s.days} d ({s.periods.toFixed(2)} periods)
+                        {s.days} d ({s.periods} full period{s.periods === 1 ? "" : "s"} owed)
                       </Td>
                       <Td>{formatCurrency(s.principal)}</Td>
                       <Td>{formatCurrency(s.interest)}</Td>

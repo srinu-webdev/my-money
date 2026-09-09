@@ -11,8 +11,16 @@
 //   • "FIXED" rate      -> a flat ₹ amount per period regardless of the
 //     principal balance (until the principal is fully repaid).
 //   • Frequency defines the period length: daily=1d, weekly=7d,
-//     monthly=30d, yearly=365d. Partial periods accrue pro-rata, by
-//     whole calendar day.
+//     monthly=30d, yearly=365d. A period is owed in full the moment ANY
+//     part of it has elapsed — matching how local lending businesses
+//     actually charge "monthly interest" (a flat sum due for the month,
+//     not a bank-style daily-prorated fraction). Taking a ₹40,000 loan
+//     at 5%/month means the full ₹2,000 is owed from day one of that
+//     month, whether the borrower repays on day 2 or day 29 — it never
+//     shows a fraction like ₹200 for "only 3 days in." The same rounding
+//     applies to every later period and to every balance-reducing
+//     segment (a partial payment still leaves at least one full period's
+//     interest owed on whatever remains, never a partial-period credit).
 //   • Accrual stops once the outstanding principal reaches zero, or the
 //     loan is cancelled (accrual is capped at `cancelledAt`).
 //   • Interest is never negative.
@@ -67,6 +75,12 @@ export const FREQ_NOUN: Record<InterestFrequency, string> = {
 function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
+// Any elapsed time within a period counts as that whole period being
+// owed — 1 day into a 30-day month is still 1 full period, 31 days in
+// is 2. Zero elapsed days owes nothing (same-day, nothing has started).
+function periodsOwed(days: number, periodDays: number): number {
+  return days > 0 ? Math.ceil(days / periodDays) : 0;
+}
 function sum<T>(arr: T[], fn: (x: T) => number): number {
   return arr.reduce((s, x) => s + (Number(fn(x)) || 0), 0);
 }
@@ -111,7 +125,7 @@ export function calculateInterestForLoan(
   let interest = 0;
   const accrueSegment = (segEnd: Date) => {
     if (segEnd <= segStart || bal <= 0) return;
-    const periods = daysBetween(segStart, segEnd) / periodDays;
+    const periods = periodsOwed(daysBetween(segStart, segEnd), periodDays);
     interest += loan.interestType === "FIXED" ? rate * periods : bal * (rate / 100) * periods;
   };
   for (const ev of events) {
@@ -262,7 +276,7 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
   const push = (end: Date, event: string) => {
     if (end <= segStart || principal <= 0) return;
     const days = daysBetween(segStart, end);
-    const periods = days / periodDays;
+    const periods = periodsOwed(days, periodDays);
     const interest = loan.interestType === "FIXED" ? rate * periods : (principal * rate * periods) / 100;
     segments.push({ from: segStart.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10), days, periods, principal, interest: round2(interest), event });
   };

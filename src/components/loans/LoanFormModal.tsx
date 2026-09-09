@@ -99,7 +99,10 @@ function LoanFormContent({
     // everyone, and never hardcode a percentage anywhere downstream.
     const perPeriod = interestType === "FIXED" ? r : (p * r) / 100;
     const days = startDate && dueDate ? daysBetween(startDate, dueDate) : 0;
-    const periods = days > 0 ? days / FREQUENCY_DAYS[interestFrequency] : 0;
+    // A full period is owed the moment any part of it has elapsed (see
+    // calculations.ts's periodsOwed) — round up, don't prorate, so this
+    // projection matches what the loan will actually accrue.
+    const periods = days > 0 ? Math.ceil(days / FREQUENCY_DAYS[interestFrequency]) : 0;
     return { perPeriod, days, periods, total: p + perPeriod * periods };
   }, [principal, interestRate, interestType, interestFrequency, startDate, dueDate]);
 
@@ -277,8 +280,13 @@ function LoanFormContent({
                     {" → "}
                     <strong className="text-[15px]">{formatCurrency(preview.perPeriod)}</strong>
                   </div>
-                  <div className="text-text-secondary">{preview.days > 0 ? `Term: ${preview.days} days ≈ ${preview.periods.toFixed(1)} periods` : "—"}</div>
+                  <div className="text-text-secondary">{preview.days > 0 ? `Term: ${preview.days} days → ${preview.periods} full ${preview.periods === 1 ? FREQ_NOUN[interestFrequency] : FREQ_NOUN[interestFrequency] + "s"}` : "—"}</div>
                 </div>
+                {interestFrequency !== "DAILY" ? (
+                  <div className="text-xs mt-1.5 opacity-70">
+                    A {freqWord} is owed in full the moment it starts — e.g. on day 1 of a new {freqWord} the customer already owes the whole {formatCurrency(preview.perPeriod)}, not a fraction of it.
+                  </div>
+                ) : null}
                 {repaymentNote ? <div className="text-xs mt-2 pt-2 border-t border-primary-200/60 leading-relaxed">{repaymentNote}</div> : null}
                 <div className="text-xs mt-1.5 opacity-80">
                   Projected interest till due date (if no principal is repaid early): <strong>{formatCurrency(preview.perPeriod * preview.periods)}</strong> · Total payable ≈{" "}
