@@ -118,6 +118,7 @@ async function main() {
       repaymentType,
       status: "ACTIVE",
       cancelledAt: null,
+      collectionDay: null,
       notes: pick(["", "", "Business working capital.", "Personal loan against gold.", "Shop expansion.", "Vehicle purchase."]),
       createdAt: start.toISOString(),
       updatedAt: start.toISOString(),

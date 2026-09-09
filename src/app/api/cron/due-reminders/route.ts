@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const created: string[] = [];
   for (const loanRow of loanRows) {
     const loan = serializeLoan(loanRow);
-    const { date: nextDue, daysUntil } = nextMonthlyCollectionDate(loan.startDate);
+    const { date: nextDue, daysUntil } = nextMonthlyCollectionDate(loan.startDate, undefined, loan.collectionDay);
     if (daysUntil !== 2) continue;
 
     const [paymentRows, disbursementRows] = await Promise.all([

@@ -24,7 +24,7 @@ export default async function DuePaymentsPage() {
   for (const loan of loans) {
     if (loan.derivedStatus === "PAID" || loan.derivedStatus === "CANCELLED") continue;
     if (loan.interestFrequency === "MONTHLY" && loan.repaymentType !== "Daily Installment") {
-      const { date: nextDueDate, daysUntil } = nextMonthlyCollectionDate(loan.startDate, t0);
+      const { date: nextDueDate, daysUntil } = nextMonthlyCollectionDate(loan.startDate, t0, loan.collectionDay);
       if (loan.balance.interestPendingWhole > 0.01 || (daysUntil >= 0 && daysUntil <= 5)) {
         monthlyItems.push({ loan, nextDueDate, daysUntil });
       }

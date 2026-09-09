@@ -96,6 +96,12 @@ model Loan {
   repaymentType     String
   status            LoanStatus        @default(ACTIVE)
   cancelledAt       DateTime?         @db.Date
+  // Overrides the recurring monthly collection day (which otherwise
+  // defaults to startDate's own day-of-month) — set when the real-world
+  // collection day the lender actually uses differs from when the loan
+  // happened to be disbursed (e.g. always collecting on the 15th
+  // regardless of which day each loan started).
+  collectionDay     Int?
   notes             String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt

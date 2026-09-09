@@ -19,6 +19,12 @@ import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 const REPAYMENT_TYPES = ["Interest Only", "Principal + Interest", "Principal First", "Daily Installment", "Custom"] as const;
 const FREQUENCIES: InterestFrequency[] = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"];
 
+function ordinal(day: number): string {
+  if (day % 100 >= 11 && day % 100 <= 13) return `${day}th`;
+  const suffix = ["th", "st", "nd", "rd"][day % 10] ?? "th";
+  return `${day}${suffix}`;
+}
+
 interface Draft {
   customerId?: string;
   principal?: string;
@@ -67,6 +73,11 @@ function LoanFormContent({
   // on what's been handed over so far — never on the full agreed amount.
   const [partialDisbursement, setPartialDisbursement] = useState(false);
   const [initialDisbursement, setInitialDisbursement] = useState("");
+  // Blank = collect on the same day-of-month the loan started (the
+  // common case). Set this only when the real collection day differs —
+  // e.g. always the 15th of every month regardless of when each loan
+  // happened to be disbursed.
+  const [collectionDay, setCollectionDay] = useState(String(loan?.collectionDay ?? ""));
 
   const freqWord = FREQ_NOUN[interestFrequency];
 
@@ -157,6 +168,7 @@ function LoanFormContent({
       repaymentType: String(formData.get("repaymentType")),
       notes: String(formData.get("notes") || ""),
       ...(!editing && partialDisbursement ? { initialDisbursement: Number(initialDisbursement) || 0 } : {}),
+      ...(collectionDay.trim() ? { collectionDay: Number(collectionDay) } : {}),
     };
     startTransition(async () => {
       if (editing) {
@@ -256,6 +268,14 @@ function LoanFormContent({
           <FormGroup label="Due Date" required>
             <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </FormGroup>
+          {interestFrequency === "MONTHLY" && repaymentType !== "Daily Installment" ? (
+            <FormGroup
+              label="Monthly Collection Day"
+              hint={`Leave blank to collect on the ${startDate ? ordinal(new Date(startDate).getDate()) : "same day"} of every month (this loan's own start day). Set a day only if you actually collect on a different fixed date, e.g. always the 15th.`}
+            >
+              <Input type="number" min={1} max={31} value={collectionDay} onChange={(e) => setCollectionDay(e.target.value)} placeholder="e.g. 15" />
+            </FormGroup>
+          ) : null}
           {repaymentType === "Daily Installment" ? (
             <FormGroup
               label="Total Amount to Collect (₹)"

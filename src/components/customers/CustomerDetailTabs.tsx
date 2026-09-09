@@ -218,7 +218,7 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                           {Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod)} month{Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod) === 1 ? "" : "s"} pending
                         </div>
                       ) : l.balance.interestRemaining > 0.01 && l.interestFrequency === "MONTHLY" ? (
-                        <div className="text-xs font-normal text-text-tertiary">Next due {formatDate(nextMonthlyCollectionDate(l.startDate).date)}</div>
+                        <div className="text-xs font-normal text-text-tertiary">Next due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
                       ) : l.balance.interestAccrued > 0 ? (
                         <div className="text-xs font-normal text-success-dark">fully paid</div>
                       ) : null}

@@ -36,6 +36,11 @@ export const loanSchema = z
     // than principal for a loan given out in tranches (₹50,000 now of a
     // ₹1,00,000 agreement); the rest can be added later via "Add Disbursement".
     initialDisbursement: z.coerce.number().min(0).optional(),
+    // Overrides the recurring monthly collection day (1-31). Blank means
+    // "use the start date's own day-of-month" — the common case. Set
+    // this when the real collection day differs from when the loan
+    // happened to be disbursed (e.g. always the 15th of every month).
+    collectionDay: z.coerce.number().int().min(1).max(31).optional(),
     notes: z.string().trim().optional(),
   })
   .refine((d) => d.dueDate > d.startDate, { message: "Due date must be after the start date.", path: ["dueDate"] })

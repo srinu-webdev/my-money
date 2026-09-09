@@ -184,7 +184,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
             balance.interestPendingWhole > 0.01
               ? `${formatCurrency(balance.interestPendingWhole)} in fully-completed period(s), rest still accruing`
               : balance.interestRemaining > 0.01 && loan.interestFrequency === "MONTHLY"
-                ? `Next due ${formatDate(nextMonthlyCollectionDate(loan.startDate).date)}`
+                ? `Next due ${formatDate(nextMonthlyCollectionDate(loan.startDate, undefined, loan.collectionDay).date)}`
                 : undefined
           }
         />

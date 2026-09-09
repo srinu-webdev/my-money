@@ -39,6 +39,7 @@ export function serializeLoan(l: PLoan): Loan {
     repaymentType: l.repaymentType,
     status: l.status,
     cancelledAt: l.cancelledAt ? dbDateToISO(l.cancelledAt) : null,
+    collectionDay: l.collectionDay,
     notes: l.notes,
     createdAt: l.createdAt.toISOString(),
     updatedAt: l.updatedAt.toISOString(),

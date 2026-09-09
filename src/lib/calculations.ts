@@ -202,13 +202,15 @@ export function interestPerPeriod(
 
 // A loan's day-of-month at disbursement doubles as its recurring monthly
 // collection day (given on the 10th -> collected on the 10th every month
-// after). Finds the NEXT occurrence of that day from `asOfDate`, clamped
-// to the last day of a shorter month (a "31st" loan collects on the
-// 28th/29th in February). Only meaningful for MONTHLY-frequency loans
-// with a recurring collection cycle (not Daily Installment).
-export function nextMonthlyCollectionDate(startDateIso: string, asOfDate?: string | Date): { date: string; daysUntil: number } {
-  const start = parseDate(startDateIso);
-  const dueDay = start.getDate();
+// after). `collectionDayOverride` lets the lender pin a fixed collection
+// day instead (e.g. always the 15th, regardless of when the loan itself
+// started) — pass `loan.collectionDay`. Finds the NEXT occurrence of
+// that day from `asOfDate`, clamped to the last day of a shorter month
+// (a "31st" loan collects on the 28th/29th in February). Only
+// meaningful for MONTHLY-frequency loans with a recurring collection
+// cycle (not Daily Installment).
+export function nextMonthlyCollectionDate(startDateIso: string, asOfDate?: string | Date, collectionDayOverride?: number | null): { date: string; daysUntil: number } {
+  const dueDay = collectionDayOverride ?? parseDate(startDateIso).getDate();
   const t0 = startOfDay(asOfDate ?? new Date());
   const y = t0.getFullYear();
   const m = t0.getMonth();

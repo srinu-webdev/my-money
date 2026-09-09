@@ -43,6 +43,9 @@ export interface Loan {
   repaymentType: string;
   status: LoanStoredStatus;
   cancelledAt: string | null;
+  // Overrides the recurring monthly collection day (1-31) — null means
+  // "use startDate's own day-of-month", the common case.
+  collectionDay: number | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;

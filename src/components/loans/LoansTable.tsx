@@ -194,7 +194,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                             +{Math.round(b.interestPendingWhole / b.interestPerPeriod)} older month{Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1 ? "" : "s"} also pending · {formatCurrency(b.interestPendingWhole)}
                           </div>
                         ) : b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
-                          <div className="text-xs font-normal text-text-tertiary">Due {formatDate(nextMonthlyCollectionDate(l.startDate).date)}</div>
+                          <div className="text-xs font-normal text-text-tertiary">Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
                         ) : null}
                       </Td>
                       <Td className={b.interestPaidThisPeriod >= b.interestPerPeriod && b.interestPerPeriod > 0 ? "text-success-dark font-semibold" : "text-success-dark"}>

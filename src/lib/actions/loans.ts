@@ -45,6 +45,7 @@ export async function createLoanAction(input: unknown): Promise<ActionResult<{ i
         startDate: isoToDbDate(d.startDate),
         dueDate: isoToDbDate(d.dueDate),
         repaymentType: d.repaymentType,
+        collectionDay: d.collectionDay ?? null,
         notes: d.notes || null,
       },
     });
@@ -95,6 +96,7 @@ export async function updateLoanAction(id: string, input: unknown): Promise<Acti
         startDate: isoToDbDate(d.startDate),
         dueDate: isoToDbDate(d.dueDate),
         repaymentType: d.repaymentType,
+        collectionDay: d.collectionDay ?? null,
         notes: d.notes || null,
         // Editing the terms of a previously-closed loan back into having a
         // balance reopens it — status is re-derived on next read anyway,
