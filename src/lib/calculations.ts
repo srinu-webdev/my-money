@@ -110,11 +110,15 @@ export function calculateInterestForLoan(
   const periodDays = FREQUENCY_DAYS[loan.interestFrequency] || 30;
 
   // One merged, chronological timeline: disbursements raise the accruing
-  // balance, principal repayments lower it. Interest for each segment
-  // between events is charged on whatever the balance was during it.
+  // balance, principal repayments lower it. A pure interest payment
+  // (principalAmount 0) doesn't touch the balance, so it's excluded here —
+  // otherwise it would split an ongoing period into two pieces that each
+  // get independently rounded up, inflating the total (recording that an
+  // interest payment was made should never itself increase how much
+  // interest the loan shows as owed).
   const events = [
     ...effectiveDisbursements(loan, disbursements).map((d) => ({ date: startOfDay(d.date), delta: Number(d.amount) || 0 })),
-    ...payments.map((p) => ({ date: startOfDay(p.paymentDate), delta: -(Number(p.principalAmount) || 0) })),
+    ...payments.filter((p) => (Number(p.principalAmount) || 0) > 0).map((p) => ({ date: startOfDay(p.paymentDate), delta: -(Number(p.principalAmount) || 0) })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
@@ -123,10 +127,20 @@ export function calculateInterestForLoan(
   let segStart = firstDate;
   let bal = 0;
   let interest = 0;
+  // Periods are counted GLOBALLY from firstDate, never reset per segment —
+  // each segment is only charged for whatever NEW whole periods its own
+  // end newly crosses into (at that segment's own balance), so splitting
+  // the timeline at a balance-changing event can never double-charge a
+  // period that was already underway.
+  let periodsCharged = 0;
   const accrueSegment = (segEnd: Date) => {
-    if (segEnd <= segStart || bal <= 0) return;
-    const periods = periodsOwed(daysBetween(segStart, segEnd), periodDays);
-    interest += loan.interestType === "FIXED" ? rate * periods : bal * (rate / 100) * periods;
+    if (segEnd <= segStart) return;
+    const totalPeriods = periodsOwed(daysBetween(firstDate, segEnd), periodDays);
+    const newPeriods = Math.max(0, totalPeriods - periodsCharged);
+    if (newPeriods > 0 && bal > 0) {
+      interest += loan.interestType === "FIXED" ? rate * newPeriods : bal * (rate / 100) * newPeriods;
+    }
+    periodsCharged = totalPeriods;
   };
   for (const ev of events) {
     if (ev.date <= segStart) {
@@ -264,21 +278,35 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
   const rate = Number(loan.interestRate) || 0;
   const segments: LoanScheduleSegment[] = [];
 
+  // Same exclusion as calculateInterestForLoan: a pure interest payment
+  // (principalAmount 0) doesn't change the balance, so it must not split
+  // an ongoing period into two independently-rounded pieces.
   const events = [
     ...effectiveDisbursements(loan, disbursements).map((d) => ({ date: startOfDay(d.date), delta: Number(d.amount) || 0, label: `Disbursement: +${formatCurrencyPlain(Number(d.amount) || 0)}` })),
-    ...payments.map((p) => ({ date: startOfDay(p.paymentDate), delta: -(Number(p.principalAmount) || 0), label: `Payment ${p.id}: −${formatCurrencyPlain(p.principalAmount)} principal` })),
+    ...payments
+      .filter((p) => (Number(p.principalAmount) || 0) > 0)
+      .map((p) => ({ date: startOfDay(p.paymentDate), delta: -(Number(p.principalAmount) || 0), label: `Payment ${p.id}: −${formatCurrencyPlain(p.principalAmount)} principal` })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const now = loan.status === "CANCELLED" && loan.cancelledAt ? startOfDay(loan.cancelledAt) : startOfDay(asOfDate ?? new Date());
-  let segStart = events.length ? events[0].date : startOfDay(loan.startDate);
+  const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
+  let segStart = firstDate;
   let principal = 0;
+  // Same global, monotonic period counter as calculateInterestForLoan —
+  // see that function's comment for why a per-segment ceiling would
+  // double-count.
+  let periodsCharged = 0;
 
   const push = (end: Date, event: string) => {
-    if (end <= segStart || principal <= 0) return;
-    const days = daysBetween(segStart, end);
-    const periods = periodsOwed(days, periodDays);
-    const interest = loan.interestType === "FIXED" ? rate * periods : (principal * rate * periods) / 100;
-    segments.push({ from: segStart.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10), days, periods, principal, interest: round2(interest), event });
+    if (end <= segStart) return;
+    const totalPeriods = periodsOwed(daysBetween(firstDate, end), periodDays);
+    const periods = Math.max(0, totalPeriods - periodsCharged);
+    if (principal > 0) {
+      const days = daysBetween(segStart, end);
+      const interest = loan.interestType === "FIXED" ? rate * periods : (principal * rate * periods) / 100;
+      segments.push({ from: segStart.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10), days, periods, principal, interest: round2(interest), event });
+    }
+    periodsCharged = totalPeriods;
   };
 
   for (const ev of events) {
