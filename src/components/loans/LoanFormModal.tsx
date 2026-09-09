@@ -58,8 +58,28 @@ function LoanFormContent({
   const [startDate, setStartDate] = useState(loan?.startDate ?? draft?.startDate ?? todayStr());
   const [dueDate, setDueDate] = useState(loan?.dueDate ?? draft?.dueDate ?? toISODate(addMonths(new Date(), 6)));
   const [repaymentType, setRepaymentType] = useState(loan?.repaymentType ?? draft?.repaymentType ?? defaults.defaultRepaymentType);
+  const [totalTarget, setTotalTarget] = useState("");
 
   const freqWord = FREQ_NOUN[interestFrequency];
+
+  // Convenience reverse-calculator for Daily Installment loans: real
+  // lending businesses usually agree "borrow ₹40,000, pay back ₹45,000
+  // total" rather than a quoted interest rate. Rather than modelling that
+  // as a separate concept, this just derives the equivalent Fixed ₹/day
+  // rate and sets it — the loan is still stored the same way as every
+  // other loan (one rate + frequency), so interest accrual, reports and
+  // the rest of the app all stay consistent; this is purely a UI shortcut.
+  function applyTotalTarget(value: string) {
+    setTotalTarget(value);
+    const total = Number(value) || 0;
+    const p = Number(principal) || 0;
+    const days = startDate && dueDate ? daysBetween(startDate, dueDate) : 0;
+    if (total > 0 && days > 0 && total >= p) {
+      setInterestType("FIXED");
+      setInterestFrequency("DAILY");
+      setInterestRate(String(Math.round(((total - p) / days) * 100) / 100));
+    }
+  }
 
   const preview = useMemo(() => {
     const p = Number(principal) || 0;
@@ -205,6 +225,15 @@ function LoanFormContent({
           <FormGroup label="Due Date" required>
             <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </FormGroup>
+          {repaymentType === "Daily Installment" ? (
+            <FormGroup
+              label="Total Amount to Collect (₹)"
+              className="sm:col-span-2"
+              hint="Optional shortcut: enter the total you agreed to collect back (principal + your profit) and the daily rate above is calculated for you."
+            >
+              <Input type="number" min={Number(principal) || 0} step="1" value={totalTarget} onChange={(e) => applyTotalTarget(e.target.value)} placeholder={`e.g. ${(Number(principal) || 0) + 5000}`} />
+            </FormGroup>
+          ) : null}
           <div className="sm:col-span-2 bg-primary-50 border border-dashed border-primary-200 rounded-[10px] px-3.5 py-3 text-[13px] text-primary-700 dark:text-indigo-300">
             {preview ? (
               <>
