@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { AddPaymentIconButton, usePaymentFormModal } from "@/components/payments/PaymentFormModal";
 import { SendReminderButton } from "@/components/loans/ReminderFormModal";
+import { MonthlyCollectionSection, type MonthlyDueItem } from "@/components/loans/MonthlyCollectionSection";
 import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/dates";
 import type { LoanRow } from "@/lib/queries";
@@ -107,7 +108,19 @@ function Section({ title, sub, items, tone, icon: Icon, customers }: { title: st
   );
 }
 
-export function DuePaymentsSections({ today, tomorrow, upcoming, customers }: { today: DueItem[]; tomorrow: DueItem[]; upcoming: DueItem[]; customers: Map<string, Customer> }) {
+export function DuePaymentsSections({
+  today,
+  tomorrow,
+  upcoming,
+  monthly,
+  customers,
+}: {
+  today: DueItem[];
+  tomorrow: DueItem[];
+  upcoming: DueItem[];
+  monthly: MonthlyDueItem[];
+  customers: Map<string, Customer>;
+}) {
   const sum = (items: DueItem[]) => items.reduce((s, x) => s + x.loan.balance.totalOutstanding, 0);
   return (
     <div>
@@ -124,6 +137,7 @@ export function DuePaymentsSections({ today, tomorrow, upcoming, customers }: { 
         <StatCard label="Upcoming (30 days)" value={formatCurrency(sum(upcoming))} icon={TrendingUp} tone="primary" hint={`${upcoming.length} loan${upcoming.length === 1 ? "" : "s"}`} />
         <StatCard label="Total Due" value={formatCurrency(sum(today) + sum(tomorrow) + sum(upcoming))} icon={Wallet} tone="info" />
       </div>
+      <MonthlyCollectionSection items={monthly} customers={customers} />
       <Section title="Due Today" sub={formatDate(new Date())} items={today} tone="danger" icon={Calendar} customers={customers} />
       <Section title="Due Tomorrow" sub="Next day" items={tomorrow} tone="warning" icon={Clock} customers={customers} />
       <Section title="Upcoming" sub="Next 30 days" items={upcoming} tone="primary" icon={TrendingUp} customers={customers} />
