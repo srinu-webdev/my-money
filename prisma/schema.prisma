@@ -100,11 +100,32 @@ model Loan {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  payments Payment[]
+  payments      Payment[]
+  disbursements Disbursement[]
 
   @@index([customerId])
   @@index([status])
   @@index([dueDate])
+}
+
+// A loan's `principal` is the AGREED total; it need not all be handed
+// over on day one. Each row here is one actual handover of cash — most
+// loans have exactly one (created automatically alongside the loan, on
+// its start date), but a loan agreed at e.g. ₹1,00,000 and given out as
+// ₹50,000 now / ₹50,000 later gets a second row when the rest is paid
+// out. Interest accrues on the running sum of disbursements to date,
+// not blindly on the full agreed principal from day one — see
+// calculateInterestForLoan's merged-timeline algorithm in lib/calculations.ts.
+model Disbursement {
+  id        String   @id
+  loanId    String
+  loan      Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  amount    Decimal  @db.Decimal(14, 2)
+  date      DateTime @db.Date
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([loanId])
 }
 
 model Payment {

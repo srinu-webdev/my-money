@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Calendar, Mail, MapPin, Phone } from "lucide-react";
-import { getActivitiesFor, getCustomerWithSummary, getLoansByCustomer, getPaymentsByCustomer } from "@/lib/queries";
+import { getActivitiesFor, getCustomerWithSummary, getDisbursementsByLoan, getLoansByCustomer, getPaymentsByCustomer } from "@/lib/queries";
 import { calculateLoanBalance, getLoanStatus } from "@/lib/calculations";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -26,8 +26,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   if (!customer) notFound();
 
   const [loans, payments, activities] = await Promise.all([getLoansByCustomer(id), getPaymentsByCustomer(id), getActivitiesFor({ customerId: id }, 40)]);
+  const disbursementsByLoan = new Map(await Promise.all(loans.map(async (l) => [l.id, await getDisbursementsByLoan(l.id)] as const)));
   const loanRows = loans.map((loan) => {
-    const balance = calculateLoanBalance(loan, payments.filter((p) => p.loanId === loan.id));
+    const balance = calculateLoanBalance(loan, payments.filter((p) => p.loanId === loan.id), undefined, disbursementsByLoan.get(loan.id));
     return { ...loan, balance, derivedStatus: getLoanStatus(loan, balance) };
   });
   const s = customer.summary;

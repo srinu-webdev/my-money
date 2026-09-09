@@ -7,7 +7,7 @@ import { customerSchema } from "@/lib/validations";
 import { nextId } from "@/lib/ids";
 import { logActivity, pushNotification } from "@/lib/log";
 import { calculateLoanBalance, getLoanStatus } from "@/lib/calculations";
-import { serializeLoan, serializePayment } from "@/lib/serialize";
+import { serializeDisbursement, serializeLoan, serializePayment } from "@/lib/serialize";
 import type { ActionResult } from "@/lib/types";
 
 function refresh() {
@@ -19,9 +19,10 @@ function refresh() {
 
 /** Loans that are neither fully paid nor cancelled — blocks a delete. */
 async function countActiveLoans(customerId: string): Promise<number> {
-  const [loans, payments] = await Promise.all([
+  const [loans, payments, disbursements] = await Promise.all([
     prisma.loan.findMany({ where: { customerId } }),
     prisma.payment.findMany({ where: { customerId } }),
+    prisma.disbursement.findMany({ where: { loan: { customerId } } }),
   ]);
   const byLoan = new Map<string, typeof payments>();
   for (const p of payments) {
@@ -29,9 +30,20 @@ async function countActiveLoans(customerId: string): Promise<number> {
     arr.push(p);
     byLoan.set(p.loanId, arr);
   }
+  const disbByLoan = new Map<string, typeof disbursements>();
+  for (const disb of disbursements) {
+    const arr = disbByLoan.get(disb.loanId) ?? [];
+    arr.push(disb);
+    disbByLoan.set(disb.loanId, arr);
+  }
   return loans.filter((l) => {
     const loan = serializeLoan(l);
-    const bal = calculateLoanBalance(loan, (byLoan.get(l.id) ?? []).map(serializePayment));
+    const bal = calculateLoanBalance(
+      loan,
+      (byLoan.get(l.id) ?? []).map(serializePayment),
+      undefined,
+      (disbByLoan.get(l.id) ?? []).map(serializeDisbursement)
+    );
     const st = getLoanStatus(loan, bal);
     return st !== "PAID" && st !== "CANCELLED";
   }).length;

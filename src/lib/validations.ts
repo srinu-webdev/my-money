@@ -30,13 +30,30 @@ export const loanSchema = z
     startDate: z.string().min(1, "Please enter a valid start date."),
     dueDate: z.string().min(1, "Please enter a valid due date."),
     repaymentType: z.enum(["Interest Only", "Principal + Interest", "Principal First", "Daily Installment", "Custom"]),
+    // Optional: how much is actually being handed over today. Left blank
+    // (or equal to principal) means "the full amount, right now" — the
+    // common case, unchanged from before this field existed. Set lower
+    // than principal for a loan given out in tranches (₹50,000 now of a
+    // ₹1,00,000 agreement); the rest can be added later via "Add Disbursement".
+    initialDisbursement: z.coerce.number().min(0).optional(),
     notes: z.string().trim().optional(),
   })
   .refine((d) => d.dueDate > d.startDate, { message: "Due date must be after the start date.", path: ["dueDate"] })
   .refine((d) => !(d.interestType === "PERCENTAGE" && d.interestRate > 100), {
     message: "Percentage rate cannot exceed 100% per period.",
     path: ["interestRate"],
+  })
+  .refine((d) => d.initialDisbursement === undefined || d.initialDisbursement <= d.principal, {
+    message: "The initial disbursement can't exceed the loan amount.",
+    path: ["initialDisbursement"],
   });
+
+export const disbursementSchema = z.object({
+  amount: z.coerce.number().positive("Amount must be greater than zero."),
+  date: z.string().min(1, "Please enter a valid date."),
+  notes: z.string().trim().optional(),
+});
+export type DisbursementInput = z.infer<typeof disbursementSchema>;
 export type LoanInput = z.infer<typeof loanSchema>;
 
 export const paymentSchema = z.object({

@@ -15,7 +15,7 @@ import { formatDate } from "@/lib/dates";
 import { getLastNMonths, monthlyAggregate } from "@/lib/chart-utils";
 import { computeReport, reportRange, type ReportRangeKey } from "@/lib/reports";
 import { exportCSV } from "@/lib/csv";
-import type { Customer, Loan, Payment } from "@/lib/types";
+import type { Customer, Disbursement, Loan, Payment } from "@/lib/types";
 
 const RANGES: { key: ReportRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
@@ -28,14 +28,24 @@ const RANGES: { key: ReportRangeKey; label: string }[] = [
   { key: "custom", label: "Custom" },
 ];
 
-export function ReportsView({ loans, payments, customers }: { loans: Loan[]; payments: Payment[]; customers: Customer[] }) {
+export function ReportsView({
+  loans,
+  payments,
+  customers,
+  disbursements = [],
+}: {
+  loans: Loan[];
+  payments: Payment[];
+  customers: Customer[];
+  disbursements?: Disbursement[];
+}) {
   const [rangeKey, setRangeKey] = useState<ReportRangeKey>("this-month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const nameOf = useMemo(() => new Map(customers.map((c) => [c.id, c.name])), [customers]);
 
   const range = reportRange(rangeKey, customFrom, customTo);
-  const rep = computeReport(loans, payments, customers, range);
+  const rep = computeReport(loans, payments, customers, range, disbursements);
 
   const byMethod = useMemo(() => {
     const m: Record<string, number> = {};

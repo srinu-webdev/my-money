@@ -7,7 +7,7 @@ import { Plus } from "lucide-react";
 import { useModal } from "@/components/providers/ModalProvider";
 import { ModalHeader, ModalBody, ModalFooter, FormError } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { FormGroup, Input, Select, Textarea } from "@/components/ui/Field";
+import { Checkbox, FormGroup, Input, Select, Textarea } from "@/components/ui/Field";
 import { createLoanAction, updateLoanAction } from "@/lib/actions/loans";
 import { getLoanFormDefaultsAction } from "@/lib/actions/options";
 import type { Customer, InterestFrequency, InterestType, Loan } from "@/lib/types";
@@ -59,6 +59,14 @@ function LoanFormContent({
   const [dueDate, setDueDate] = useState(loan?.dueDate ?? draft?.dueDate ?? toISODate(addMonths(new Date(), 6)));
   const [repaymentType, setRepaymentType] = useState(loan?.repaymentType ?? draft?.repaymentType ?? defaults.defaultRepaymentType);
   const [totalTarget, setTotalTarget] = useState("");
+  // Most loans hand over the full agreed amount on day one — this stays
+  // unchecked (the default) for that common case. Uncheck it only when
+  // the money is actually being given in tranches (e.g. ₹50,000 now of a
+  // ₹1,00,000 agreement); the rest is added later from the loan detail
+  // page's "Add Disbursement" button, and interest correctly accrues only
+  // on what's been handed over so far — never on the full agreed amount.
+  const [partialDisbursement, setPartialDisbursement] = useState(false);
+  const [initialDisbursement, setInitialDisbursement] = useState("");
 
   const freqWord = FREQ_NOUN[interestFrequency];
 
@@ -143,6 +151,7 @@ function LoanFormContent({
       dueDate,
       repaymentType: String(formData.get("repaymentType")),
       notes: String(formData.get("notes") || ""),
+      ...(!editing && partialDisbursement ? { initialDisbursement: Number(initialDisbursement) || 0 } : {}),
     };
     startTransition(async () => {
       if (editing) {
@@ -194,6 +203,23 @@ function LoanFormContent({
           <FormGroup label="Loan Amount (₹)" required>
             <Input type="number" name="principal" min={1} step="1" value={principal} onChange={(e) => setPrincipal(e.target.value)} placeholder="1,00,000" />
           </FormGroup>
+          {!editing ? (
+            <FormGroup label=" " className="flex items-end pb-2">
+              <Checkbox label="Only part of this amount is being given today" checked={partialDisbursement} onChange={(e) => setPartialDisbursement(e.target.checked)} />
+            </FormGroup>
+          ) : (
+            <div />
+          )}
+          {!editing && partialDisbursement ? (
+            <FormGroup
+              label="Amount Given Now (₹)"
+              className="sm:col-span-2"
+              required
+              hint={`The remaining ${formatCurrency(Math.max(0, (Number(principal) || 0) - (Number(initialDisbursement) || 0)))} can be added later from the loan page once it's actually handed over — interest won't accrue on it until then.`}
+            >
+              <Input type="number" min={0} max={Number(principal) || undefined} step="1" value={initialDisbursement} onChange={(e) => setInitialDisbursement(e.target.value)} placeholder={`e.g. ${Math.round((Number(principal) || 0) / 2)}`} autoFocus />
+            </FormGroup>
+          ) : null}
           <FormGroup label="Interest Rate Type">
             <Select value={interestType} onChange={(e) => setInterestType(e.target.value as InterestType)}>
               <option value="PERCENTAGE">Percentage (%)</option>
@@ -258,6 +284,11 @@ function LoanFormContent({
                   Projected interest till due date (if no principal is repaid early): <strong>{formatCurrency(preview.perPeriod * preview.periods)}</strong> · Total payable ≈{" "}
                   <strong>{formatCurrency(preview.total)}</strong>
                 </div>
+                {!editing && partialDisbursement ? (
+                  <div className="text-xs mt-1.5 opacity-80">
+                    This projection assumes the full amount is out from the start date — since only {formatCurrency(Number(initialDisbursement) || 0)} is being given today, actual interest will be lower until the rest is disbursed.
+                  </div>
+                ) : null}
               </>
             ) : (
               "Enter a loan amount to preview interest."

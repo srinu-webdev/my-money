@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getActivitiesFor, getCustomerById, getLoanById, getPaymentsByLoan } from "@/lib/queries";
+import { getActivitiesFor, getCustomerById, getDisbursementsByLoan, getLoanById, getPaymentsByLoan } from "@/lib/queries";
 import { calculateInterestForLoan, calculateLoanBalance, getLoanSchedule, getLoanStatus, FREQ_LABEL, FREQ_NOUN } from "@/lib/calculations";
 import { CalendarClock } from "lucide-react";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -9,9 +9,10 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { formatCurrency } from "@/lib/format";
 import { daysBetween, formatDate, formatDateTime } from "@/lib/dates";
-import { Wallet, Percent, CheckCircle2, Clock, TrendingUp, CreditCard, AlertTriangle, Info } from "lucide-react";
+import { Wallet, Percent, CheckCircle2, Clock, TrendingUp, CreditCard, AlertTriangle, Info, HandCoins } from "lucide-react";
 import { LoanDetailTabs } from "@/components/loans/LoanDetailTabs";
 import { LoanDetailActions } from "@/components/loans/LoanDetailActions";
+import { AddDisbursementButton, DisbursementHistoryRow } from "@/components/loans/DisbursementFormModal";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +26,15 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   const loan = await getLoanById(id);
   if (!loan) notFound();
 
-  const [payments, customer, activities] = await Promise.all([getPaymentsByLoan(id), getCustomerById(loan.customerId), getActivitiesFor({ loanId: id }, 40)]);
-  const balance = calculateLoanBalance(loan, payments);
+  const [payments, disbursements, customer, activities] = await Promise.all([
+    getPaymentsByLoan(id),
+    getDisbursementsByLoan(id),
+    getCustomerById(loan.customerId),
+    getActivitiesFor({ loanId: id }, 40),
+  ]);
+  const balance = calculateLoanBalance(loan, payments, undefined, disbursements);
   const status = getLoanStatus(loan, balance);
-  const schedule = getLoanSchedule(loan, payments);
+  const schedule = getLoanSchedule(loan, payments, undefined, disbursements);
   const paidPct = loan.principal ? Math.min(100, Math.round((balance.principalPaid / loan.principal) * 100)) : 0;
   const rateLabel = loan.interestType === "FIXED" ? `${formatCurrency(loan.interestRate)} / ${FREQ_NOUN[loan.interestFrequency]}` : `${loan.interestRate}% ${FREQ_LABEL[loan.interestFrequency]}`;
 
@@ -42,7 +48,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   const dailyPlan =
     loan.repaymentType === "Daily Installment" && totalDays > 0
       ? (() => {
-          const fullTermInterest = calculateInterestForLoan(loan, loan.dueDate, []);
+          const fullTermInterest = calculateInterestForLoan(loan, loan.dueDate, [], disbursements);
           const totalPayable = loan.principal + fullTermInterest;
           const dailyAmount = totalPayable / totalDays;
           const daysElapsed = Math.min(totalDays, Math.max(0, daysBetween(loan.startDate, new Date())));
@@ -86,8 +92,20 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
             · {customer?.phone} · Created {formatDate(loan.createdAt)}
           </p>
         </div>
-        <LoanDetailActions loan={loan} paymentsCount={balance.paymentsCount} status={status} />
+        <div className="flex gap-2 flex-wrap items-start">
+          <AddDisbursementButton loan={loan} pending={balance.pendingDisbursement} />
+          <LoanDetailActions loan={loan} paymentsCount={balance.paymentsCount} status={status} />
+        </div>
       </div>
+
+      {balance.pendingDisbursement > 0 && (
+        <div className="flex gap-2.5 bg-info-light text-info-dark dark:text-sky-300 rounded-[10px] px-4 py-3 text-[13px] mb-5">
+          <HandCoins className="w-[18px] h-[18px] shrink-0 mt-0.5" />
+          <span>
+            <strong>{formatCurrency(balance.totalDisbursed)} disbursed so far</strong> of the {formatCurrency(loan.principal)} agreed amount — {formatCurrency(balance.pendingDisbursement)} is still pending. Interest only accrues on money actually handed over, so it&rsquo;s not counted as outstanding yet.
+          </span>
+        </div>
+      )}
 
       {status === "OVERDUE" && (
         <div className="flex gap-2.5 bg-danger-light text-danger-dark dark:text-red-300 rounded-[10px] px-4 py-3 text-[13px] mb-5">
@@ -148,7 +166,13 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        <StatCard label="Original Principal" value={formatCurrency(balance.principal)} icon={Wallet} tone="primary" hint={rateLabel} />
+        <StatCard
+          label="Agreed Principal"
+          value={formatCurrency(balance.principal)}
+          icon={Wallet}
+          tone="primary"
+          hint={balance.pendingDisbursement > 0 ? `${formatCurrency(balance.totalDisbursed)} disbursed · ${rateLabel}` : rateLabel}
+        />
         <StatCard label="Interest Accrued" value={formatCurrency(balance.interestAccrued)} icon={Percent} tone="purple" hint={`${formatCurrency(balance.interestPerPeriod)} per period on current balance`} />
         <StatCard label="Interest Paid" value={formatCurrency(balance.interestPaid)} icon={CheckCircle2} tone="success" />
         <StatCard label="Interest Remaining" value={formatCurrency(balance.interestRemaining)} icon={Clock} tone={balance.interestRemaining > 0 ? "warning" : "success"} />
@@ -195,6 +219,21 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
               {loan.notes ? <div className="bg-info-light text-info-dark dark:text-sky-300 rounded-[10px] px-3.5 py-2.5 text-[13px] mt-4">{loan.notes}</div> : null}
             </div>
           </Card>
+          {(disbursements.length > 1 || balance.pendingDisbursement > 0) && (
+            <Card>
+              <div className="px-4 sm:px-[22px] py-[18px] border-b border-border flex items-center justify-between gap-2">
+                <h3 className="text-[15px] font-bold">Disbursements</h3>
+                <span className="text-[12px] text-text-tertiary">{formatCurrency(balance.totalDisbursed)} of {formatCurrency(loan.principal)}</span>
+              </div>
+              <div className="p-4 sm:p-[22px]">
+                <div className="flex flex-col">
+                  {disbursements.map((d) => (
+                    <DisbursementHistoryRow key={d.id} d={d} />
+                  ))}
+                </div>
+              </div>
+            </Card>
+          )}
           <Card>
             <div className="p-4 sm:p-[22px]">
               <div className="flex justify-between text-sm mb-2">

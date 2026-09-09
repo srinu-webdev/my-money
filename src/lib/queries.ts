@@ -5,12 +5,13 @@ import {
   serializeActivity,
   serializeAdmin,
   serializeCustomer,
+  serializeDisbursement,
   serializeLoan,
   serializeNotification,
   serializePayment,
   serializeSettings,
 } from "./serialize";
-import type { Activity, AdminProfile, Customer, Loan, Notification, Payment, Settings } from "./types";
+import type { Activity, AdminProfile, Customer, Disbursement, Loan, Notification, Payment, Settings } from "./types";
 import { calculateCustomerSummary, calculateLoanBalance, getDashboardStats, getLoanStatus } from "./calculations";
 import { todayStr } from "./dates";
 import type { CustomerSummary, DashboardStats, LoanBalance, LoanStatus } from "./types";
@@ -72,6 +73,26 @@ export async function getPaymentById(id: string): Promise<Payment | null> {
   return row ? serializePayment(row) : null;
 }
 
+export async function getAllDisbursements(): Promise<Disbursement[]> {
+  const rows = await prisma.disbursement.findMany({ orderBy: { date: "asc" } });
+  return rows.map(serializeDisbursement);
+}
+
+export async function getDisbursementsByLoan(loanId: string): Promise<Disbursement[]> {
+  const rows = await prisma.disbursement.findMany({ where: { loanId }, orderBy: { date: "asc" } });
+  return rows.map(serializeDisbursement);
+}
+
+function groupByLoan<T extends { loanId: string }>(rows: T[]): Map<string, T[]> {
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    const arr = m.get(r.loanId) ?? [];
+    arr.push(r);
+    m.set(r.loanId, arr);
+  }
+  return m;
+}
+
 export async function getAllNotifications(): Promise<Notification[]> {
   const rows = await prisma.notification.findMany({ orderBy: { createdAt: "desc" }, take: 300 });
   return rows.map(serializeNotification);
@@ -124,15 +145,11 @@ export interface LoanRow extends Loan {
 }
 
 export async function getAllLoansWithBalance(): Promise<LoanRow[]> {
-  const [loans, payments] = await Promise.all([getAllLoans(), getAllPayments()]);
-  const byLoan = new Map<string, Payment[]>();
-  for (const p of payments) {
-    const arr = byLoan.get(p.loanId) ?? [];
-    arr.push(p);
-    byLoan.set(p.loanId, arr);
-  }
+  const [loans, payments, disbursements] = await Promise.all([getAllLoans(), getAllPayments(), getAllDisbursements()]);
+  const paymentsByLoan = groupByLoan(payments);
+  const disbursementsByLoan = groupByLoan(disbursements);
   return loans.map((loan) => {
-    const balance = calculateLoanBalance(loan, byLoan.get(loan.id) ?? []);
+    const balance = calculateLoanBalance(loan, paymentsByLoan.get(loan.id) ?? [], undefined, disbursementsByLoan.get(loan.id));
     return { ...loan, balance, derivedStatus: getLoanStatus(loan, balance) };
   });
 }
@@ -140,8 +157,8 @@ export async function getAllLoansWithBalance(): Promise<LoanRow[]> {
 export async function getLoanWithBalance(id: string): Promise<LoanRow | null> {
   const loan = await getLoanById(id);
   if (!loan) return null;
-  const payments = await getPaymentsByLoan(id);
-  const balance = calculateLoanBalance(loan, payments);
+  const [payments, disbursements] = await Promise.all([getPaymentsByLoan(id), getDisbursementsByLoan(id)]);
+  const balance = calculateLoanBalance(loan, payments, undefined, disbursements);
   return { ...loan, balance, derivedStatus: getLoanStatus(loan, balance) };
 }
 
@@ -150,22 +167,18 @@ export interface CustomerRow extends Customer {
 }
 
 export async function getAllCustomersWithSummary(): Promise<CustomerRow[]> {
-  const [customers, loans, payments] = await Promise.all([getAllCustomers(), getAllLoans(), getAllPayments()]);
+  const [customers, loans, payments, disbursements] = await Promise.all([getAllCustomers(), getAllLoans(), getAllPayments(), getAllDisbursements()]);
   const loansByCustomer = new Map<string, Loan[]>();
   for (const l of loans) {
     const arr = loansByCustomer.get(l.customerId) ?? [];
     arr.push(l);
     loansByCustomer.set(l.customerId, arr);
   }
-  const paymentsByLoan = new Map<string, Payment[]>();
-  for (const p of payments) {
-    const arr = paymentsByLoan.get(p.loanId) ?? [];
-    arr.push(p);
-    paymentsByLoan.set(p.loanId, arr);
-  }
+  const paymentsByLoan = groupByLoan(payments);
+  const disbursementsByLoan = groupByLoan(disbursements);
   return customers.map((c) => ({
     ...c,
-    summary: calculateCustomerSummary(loansByCustomer.get(c.id) ?? [], paymentsByLoan),
+    summary: calculateCustomerSummary(loansByCustomer.get(c.id) ?? [], paymentsByLoan, disbursementsByLoan),
   }));
 }
 
@@ -173,18 +186,14 @@ export async function getCustomerWithSummary(id: string): Promise<CustomerRow | 
   const customer = await getCustomerById(id);
   if (!customer) return null;
   const loans = await getLoansByCustomer(id);
-  const payments = await getAllPayments(); // small dataset in this tool; filtered below per loan
-  const paymentsByLoan = new Map<string, Payment[]>();
-  for (const p of payments) {
-    if (p.customerId !== id) continue;
-    const arr = paymentsByLoan.get(p.loanId) ?? [];
-    arr.push(p);
-    paymentsByLoan.set(p.loanId, arr);
-  }
-  return { ...customer, summary: calculateCustomerSummary(loans, paymentsByLoan) };
+  const [payments, disbursements] = await Promise.all([getPaymentsByCustomer(id), getAllDisbursements()]);
+  const paymentsByLoan = groupByLoan(payments);
+  const loanIds = new Set(loans.map((l) => l.id));
+  const disbursementsByLoan = groupByLoan(disbursements.filter((d) => loanIds.has(d.loanId)));
+  return { ...customer, summary: calculateCustomerSummary(loans, paymentsByLoan, disbursementsByLoan) };
 }
 
 export async function getDashboardData(): Promise<DashboardStats> {
-  const [loans, payments, customerCount] = await Promise.all([getAllLoans(), getAllPayments(), prisma.customer.count()]);
-  return getDashboardStats(loans, payments, customerCount, todayStr());
+  const [loans, payments, disbursements, customerCount] = await Promise.all([getAllLoans(), getAllPayments(), getAllDisbursements(), prisma.customer.count()]);
+  return getDashboardStats(loans, payments, customerCount, todayStr(), groupByLoan(disbursements));
 }

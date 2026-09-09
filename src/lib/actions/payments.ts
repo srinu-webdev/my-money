@@ -9,9 +9,9 @@ import { nextId } from "@/lib/ids";
 import { logActivity, pushNotification } from "@/lib/log";
 import { calculateLoanBalance, computeAllocation } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
-import { isoToDbDate, serializeLoan, serializePayment } from "@/lib/serialize";
+import { isoToDbDate, serializeDisbursement, serializeLoan, serializePayment } from "@/lib/serialize";
 import { parseDate, startOfDay } from "@/lib/dates";
-import type { ActionResult, Loan, Payment } from "@/lib/types";
+import type { ActionResult, Disbursement, Loan, Payment } from "@/lib/types";
 
 type Tx = Prisma.TransactionClient;
 
@@ -24,9 +24,12 @@ function refresh() {
 async function syncLoanStatusAfterPaymentChange(tx: Tx, loanId: string) {
   const loanRow = await tx.loan.findUnique({ where: { id: loanId } });
   if (!loanRow || loanRow.status === "CANCELLED") return;
-  const payments = await tx.payment.findMany({ where: { loanId } });
+  const [payments, disbursements] = await Promise.all([
+    tx.payment.findMany({ where: { loanId } }),
+    tx.disbursement.findMany({ where: { loanId } }),
+  ]);
   const loan = serializeLoan(loanRow);
-  const bal = calculateLoanBalance(loan, payments.map(serializePayment));
+  const bal = calculateLoanBalance(loan, payments.map(serializePayment), undefined, disbursements.map(serializeDisbursement));
   if (bal.totalOutstanding <= 1 && loanRow.status !== "PAID") {
     await tx.loan.update({ where: { id: loanId }, data: { status: "PAID" } });
     await logActivity(tx, "loan_paid", `Loan ${loanId} fully paid`, { customerId: loanRow.customerId, loanId });
@@ -36,14 +39,24 @@ async function syncLoanStatusAfterPaymentChange(tx: Tx, loanId: string) {
   }
 }
 
-function validateAllocation(loan: Loan, existing: Payment[], amount: number, allocation: string, customInterest: number | undefined, customPrincipal: number | undefined, paymentDate: string): string | null {
+function validateAllocation(
+  loan: Loan,
+  existing: Payment[],
+  amount: number,
+  allocation: string,
+  customInterest: number | undefined,
+  customPrincipal: number | undefined,
+  paymentDate: string,
+  disbursements: Disbursement[]
+): string | null {
   const a = computeAllocation(
     loan,
     existing,
     amount,
     allocation as "interest" | "principal" | "interest_principal" | "custom",
     { interestAmount: customInterest, principalAmount: customPrincipal },
-    paymentDate
+    paymentDate,
+    disbursements
   );
   if (allocation === "custom") {
     if (a.interestAmount < 0 || a.principalAmount < 0) return "Allocation amounts cannot be negative.";
@@ -74,10 +87,11 @@ export async function createPaymentAction(input: unknown): Promise<ActionResult<
   }
 
   const existing = (await prisma.payment.findMany({ where: { loanId: d.loanId } })).map(serializePayment);
-  const err = validateAllocation(loan, existing, d.amount, d.allocation, d.customInterest, d.customPrincipal, d.paymentDate);
+  const disbursements = (await prisma.disbursement.findMany({ where: { loanId: d.loanId } })).map(serializeDisbursement);
+  const err = validateAllocation(loan, existing, d.amount, d.allocation, d.customInterest, d.customPrincipal, d.paymentDate, disbursements);
   if (err) return { ok: false, error: err };
 
-  const a = computeAllocation(loan, existing, d.amount, d.allocation, { interestAmount: d.customInterest, principalAmount: d.customPrincipal }, d.paymentDate);
+  const a = computeAllocation(loan, existing, d.amount, d.allocation, { interestAmount: d.customInterest, principalAmount: d.customPrincipal }, d.paymentDate, disbursements);
   const session = await getSessionPayload();
   const admin = session ? await prisma.admin.findUnique({ where: { id: session.adminId } }) : null;
   const customer = await prisma.customer.findUnique({ where: { id: loan.customerId } });
@@ -127,9 +141,10 @@ export async function updatePaymentAction(id: string, input: unknown): Promise<A
   if (parseDate(d.paymentDate) > startOfDay(new Date())) return { ok: false, error: "Payment date cannot be in the future." };
 
   const others = (await prisma.payment.findMany({ where: { loanId: d.loanId, id: { not: id } } })).map(serializePayment);
-  const err = validateAllocation(loan, others, d.amount, d.allocation, d.customInterest, d.customPrincipal, d.paymentDate);
+  const disbursements = (await prisma.disbursement.findMany({ where: { loanId: d.loanId } })).map(serializeDisbursement);
+  const err = validateAllocation(loan, others, d.amount, d.allocation, d.customInterest, d.customPrincipal, d.paymentDate, disbursements);
   if (err) return { ok: false, error: err };
-  const a = computeAllocation(loan, others, d.amount, d.allocation, { interestAmount: d.customInterest, principalAmount: d.customPrincipal }, d.paymentDate);
+  const a = computeAllocation(loan, others, d.amount, d.allocation, { interestAmount: d.customInterest, principalAmount: d.customPrincipal }, d.paymentDate, disbursements);
 
   await prisma.$transaction(async (tx) => {
     await tx.payment.update({

@@ -64,11 +64,12 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
     return list;
   }, [customers, search, filter, from, to, now]);
 
-  const { sorted, field, dir, toggle } = useSort(filtered, "createdAt", (c, f) => {
+  const { sorted, field, dir, toggle } = useSort(filtered, "firstLoanDate", (c, f) => {
     if (f === "borrowed") return c.summary.totalBorrowed;
     if (f === "paid") return c.summary.totalPayments;
     if (f === "outstanding") return c.summary.totalOutstanding;
     if (f === "name") return c.name;
+    if (f === "firstLoanDate") return c.summary.firstLoanDate ?? "";
     return (c as unknown as Record<string, string>)[f] ?? "";
   });
   const { page, setPage, totalPages, pageItems, total, startIdx, endIdx } = usePagination(sorted, 10);
@@ -224,7 +225,8 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                   <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} />
                   <Th>Active Loans</Th>
                   <Th>Status</Th>
-                  <SortTh label="Created" active={field === "createdAt"} dir={dir} onClick={() => toggle("createdAt")} />
+                  <SortTh label="Loan Taken" active={field === "firstLoanDate"} dir={dir} onClick={() => toggle("firstLoanDate")} />
+                  <Th>Completed</Th>
                   <Th />
                 </tr>
               </thead>
@@ -263,7 +265,20 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                     <Td>
                       <Badge tone={c.status === "ACTIVE" ? "success" : "gray"}>{c.status === "ACTIVE" ? "Active" : "Inactive"}</Badge>
                     </Td>
-                    <Td className="text-text-secondary">{formatDate(c.createdAt)}</Td>
+                    <Td className="text-text-secondary">{c.summary.firstLoanDate ? formatDate(c.summary.firstLoanDate) : "No loan yet"}</Td>
+                    <Td className="text-text-secondary">
+                      {c.summary.totalLoans > 0 && c.summary.activeLoans === 0 && c.summary.completedLoans > 0 ? (
+                        c.summary.lastPaymentDate ? (
+                          formatDate(c.summary.lastPaymentDate)
+                        ) : (
+                          "Fully paid"
+                        )
+                      ) : c.summary.activeLoans > 0 ? (
+                        <span className="text-text-tertiary">In progress</span>
+                      ) : (
+                        "—"
+                      )}
+                    </Td>
                     <Td>
                       <Dropdown
                         items={[
@@ -315,8 +330,21 @@ export function ExportCustomersButton({ customers }: { customers: CustomerRow[] 
       onClick={() =>
         exportCSV(
           `lendpro-customers-${new Date().toISOString().slice(0, 10)}.csv`,
-          ["Customer ID", "Name", "Phone", "Email", "Status", "Total Borrowed", "Total Paid", "Outstanding", "Active Loans", "Created"],
-          customers.map((c) => [c.id, c.name, c.phone, c.email ?? "", c.status, c.summary.totalBorrowed, c.summary.totalPayments, c.summary.totalOutstanding, c.summary.activeLoans, formatDate(c.createdAt)])
+          ["Customer ID", "Name", "Phone", "Email", "Status", "Total Borrowed", "Total Paid", "Outstanding", "Active Loans", "Loan Taken", "Completed", "Registered"],
+          customers.map((c) => [
+            c.id,
+            c.name,
+            c.phone,
+            c.email ?? "",
+            c.status,
+            c.summary.totalBorrowed,
+            c.summary.totalPayments,
+            c.summary.totalOutstanding,
+            c.summary.activeLoans,
+            c.summary.firstLoanDate ? formatDate(c.summary.firstLoanDate) : "",
+            c.summary.activeLoans === 0 && c.summary.completedLoans > 0 && c.summary.lastPaymentDate ? formatDate(c.summary.lastPaymentDate) : "",
+            formatDate(c.createdAt),
+          ])
         )
       }
     >

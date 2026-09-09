@@ -1,5 +1,5 @@
-import type { Customer as PCustomer, Loan as PLoan, Payment as PPayment, Notification as PNotification, Activity as PActivity, Settings as PSettings, Admin as PAdmin } from "@prisma/client";
-import type { Customer, Loan, Payment, Notification, Activity, Settings, AdminProfile } from "./types";
+import type { Customer as PCustomer, Loan as PLoan, Payment as PPayment, Notification as PNotification, Activity as PActivity, Settings as PSettings, Admin as PAdmin, Disbursement as PDisbursement } from "@prisma/client";
+import type { Customer, Loan, Payment, Notification, Activity, Settings, AdminProfile, Disbursement } from "./types";
 
 // Prisma returns `@db.Date` columns as a Date object at UTC midnight for
 // that calendar day. Reading it back with LOCAL getters would shift the
@@ -61,6 +61,10 @@ export function serializePayment(p: PPayment): Payment {
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   };
+}
+
+export function serializeDisbursement(d: PDisbursement): Disbursement {
+  return { id: d.id, loanId: d.loanId, amount: d.amount.toNumber(), date: dbDateToISO(d.date), notes: d.notes, createdAt: d.createdAt.toISOString() };
 }
 
 export function serializeNotification(n: PNotification): Notification {

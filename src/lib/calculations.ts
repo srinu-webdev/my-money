@@ -16,12 +16,23 @@
 //   • Accrual stops once the outstanding principal reaches zero, or the
 //     loan is cancelled (accrual is capped at `cancelledAt`).
 //   • Interest is never negative.
+//
+// DISBURSEMENT TRANCHES: a loan's `principal` is the AGREED total — it
+// doesn't have to be handed over all at once. If a loan carries explicit
+// Disbursement rows (e.g. ₹50,000 now, ₹50,000 later against a ₹1,00,000
+// agreement), interest accrues on the running sum of disbursements to
+// date, merged into the same chronological timeline as principal
+// repayments: disbursements raise the accruing balance, repayments lower
+// it. A loan with no Disbursement rows (the common case) behaves exactly
+// as before — the full principal is treated as handed over on the start
+// date.
 // =====================================================================
 import { daysBetween, parseDate, startOfDay } from "./dates";
 import type {
   AllocationMode,
   CustomerSummary,
   DashboardStats,
+  Disbursement,
   InterestFrequency,
   Loan,
   LoanBalance,
@@ -60,44 +71,58 @@ function sum<T>(arr: T[], fn: (x: T) => number): number {
   return arr.reduce((s, x) => s + (Number(fn(x)) || 0), 0);
 }
 
+type DisbursementLike = Pick<Disbursement, "date" | "amount">;
+type PaymentLike = Pick<Payment, "paymentDate" | "principalAmount">;
+
+/** Disbursement rows if any exist, otherwise a single synthesized handover of the full principal on the start date — keeps every caller that doesn't know about tranches working unchanged. */
+function effectiveDisbursements(loan: Pick<Loan, "principal" | "startDate">, disbursements?: DisbursementLike[]): DisbursementLike[] {
+  if (disbursements && disbursements.length) return disbursements;
+  return [{ date: loan.startDate, amount: loan.principal }];
+}
+
 export function calculateInterestForLoan(
   loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt">,
   asOfDate: string | Date,
-  payments: Pick<Payment, "paymentDate" | "principalAmount">[]
+  payments: PaymentLike[],
+  disbursements?: DisbursementLike[]
 ): number {
   let asOf = startOfDay(asOfDate);
   if (loan.status === "CANCELLED" && loan.cancelledAt) {
     const c = startOfDay(loan.cancelledAt);
     if (c < asOf) asOf = c; // accrual stops at cancellation
   }
-  const start = startOfDay(loan.startDate);
-  if (asOf <= start) return 0;
 
   const rate = Number(loan.interestRate) || 0;
   const periodDays = FREQUENCY_DAYS[loan.interestFrequency] || 30;
-  const sorted = [...payments].sort(
-    (a, b) => parseDate(a.paymentDate).getTime() - parseDate(b.paymentDate).getTime()
-  );
 
-  let segStart = start;
-  let bal = Number(loan.principal) || 0;
+  // One merged, chronological timeline: disbursements raise the accruing
+  // balance, principal repayments lower it. Interest for each segment
+  // between events is charged on whatever the balance was during it.
+  const events = [
+    ...effectiveDisbursements(loan, disbursements).map((d) => ({ date: startOfDay(d.date), delta: Number(d.amount) || 0 })),
+    ...payments.map((p) => ({ date: startOfDay(p.paymentDate), delta: -(Number(p.principalAmount) || 0) })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
+  if (asOf <= firstDate) return 0;
+
+  let segStart = firstDate;
+  let bal = 0;
   let interest = 0;
   const accrueSegment = (segEnd: Date) => {
     if (segEnd <= segStart || bal <= 0) return;
     const periods = daysBetween(segStart, segEnd) / periodDays;
     interest += loan.interestType === "FIXED" ? rate * periods : bal * (rate / 100) * periods;
   };
-  for (const p of sorted) {
-    const pDate = startOfDay(p.paymentDate);
-    const principalPortion = Number(p.principalAmount) || 0;
-    if (pDate <= segStart) {
-      bal = Math.max(0, bal - principalPortion);
+  for (const ev of events) {
+    if (ev.date <= segStart) {
+      bal = Math.max(0, bal + ev.delta);
       continue;
     }
-    if (pDate >= asOf) break;
-    accrueSegment(pDate);
-    bal = Math.max(0, bal - principalPortion);
-    segStart = pDate;
+    if (ev.date >= asOf) break;
+    accrueSegment(ev.date);
+    bal = Math.max(0, bal + ev.delta);
+    segStart = ev.date;
   }
   accrueSegment(asOf);
   return Math.max(0, round2(interest));
@@ -111,12 +136,16 @@ export function interestPerPeriod(
   return loan.interestType === "FIXED" ? rate : (principal * rate) / 100;
 }
 
-export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?: string | Date): LoanBalance {
+export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?: string | Date, disbursements?: Disbursement[]): LoanBalance {
   const principal = Number(loan.principal) || 0;
+  const totalDisbursed = round2(sum(effectiveDisbursements(loan, disbursements), (d) => d.amount));
+  const pendingDisbursement = Math.max(0, round2(principal - totalDisbursed));
   const principalPaid = round2(sum(payments, (p) => p.principalAmount));
   const interestPaid = round2(sum(payments, (p) => p.interestAmount));
-  const principalRemaining = Math.max(0, round2(principal - principalPaid));
-  const interestAccrued = calculateInterestForLoan(loan, asOfDate ?? new Date(), payments);
+  // What's owed is measured against what's actually been handed over, not
+  // the full agreed amount — money not yet disbursed isn't debt yet.
+  const principalRemaining = Math.max(0, round2(totalDisbursed - principalPaid));
+  const interestAccrued = calculateInterestForLoan(loan, asOfDate ?? new Date(), payments, disbursements);
   const interestRemaining = Math.max(0, round2(interestAccrued - interestPaid));
   const totalPaid = round2(principalPaid + interestPaid);
   const totalOutstanding = round2(principalRemaining + interestRemaining);
@@ -140,6 +169,8 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
     daysActive: Math.max(0, daysBetween(loan.startDate, today)),
     daysOverdue: due && due < startOfDay(today) && totalOutstanding > 0 ? daysBetween(due, today) : 0,
     interestPerPeriod: interestPerPeriod(loan, principalRemaining),
+    totalDisbursed,
+    pendingDisbursement,
   };
 }
 
@@ -169,14 +200,16 @@ export function computeAllocation(
   amount: number,
   mode: AllocationMode,
   custom?: { interestAmount?: number; principalAmount?: number },
-  asOfDate?: string
+  asOfDate?: string,
+  disbursements?: Disbursement[]
 ): { interestAmount: number; principalAmount: number; interestRemaining: number; principalRemaining: number; unallocated: number } {
+  const totalDisbursed = sum(effectiveDisbursements(loan, disbursements), (d) => d.amount);
   const principalPaid = sum(existingPayments, (p) => p.principalAmount);
   const interestPaid = sum(existingPayments, (p) => p.interestAmount);
-  const principalRemaining = Math.max(0, (Number(loan.principal) || 0) - principalPaid);
+  const principalRemaining = Math.max(0, totalDisbursed - principalPaid);
   const interestRemaining = Math.max(
     0,
-    calculateInterestForLoan(loan, asOfDate ?? new Date(), existingPayments) - interestPaid
+    calculateInterestForLoan(loan, asOfDate ?? new Date(), existingPayments, disbursements) - interestPaid
   );
   amount = Number(amount) || 0;
   let interestAmount = 0;
@@ -211,15 +244,20 @@ export interface LoanScheduleSegment {
   event: string;
 }
 
-/** Segment-by-segment breakdown of how the accrued interest was computed — for the loan detail page's "Interest Breakdown" tab. */
-export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: string | Date): LoanScheduleSegment[] {
-  const sorted = [...payments].sort((a, b) => parseDate(a.paymentDate).getTime() - parseDate(b.paymentDate).getTime());
+/** Segment-by-segment breakdown of how the accrued interest was computed — for the loan detail page's "Interest Breakdown" tab. Merges disbursements and repayments into one timeline, same as calculateInterestForLoan. */
+export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: string | Date, disbursements?: Disbursement[]): LoanScheduleSegment[] {
   const periodDays = FREQUENCY_DAYS[loan.interestFrequency] || 30;
   const rate = Number(loan.interestRate) || 0;
   const segments: LoanScheduleSegment[] = [];
-  let segStart = startOfDay(loan.startDate);
-  let principal = Number(loan.principal) || 0;
+
+  const events = [
+    ...effectiveDisbursements(loan, disbursements).map((d) => ({ date: startOfDay(d.date), delta: Number(d.amount) || 0, label: `Disbursement: +${formatCurrencyPlain(Number(d.amount) || 0)}` })),
+    ...payments.map((p) => ({ date: startOfDay(p.paymentDate), delta: -(Number(p.principalAmount) || 0), label: `Payment ${p.id}: −${formatCurrencyPlain(p.principalAmount)} principal` })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime());
+
   const now = loan.status === "CANCELLED" && loan.cancelledAt ? startOfDay(loan.cancelledAt) : startOfDay(asOfDate ?? new Date());
+  let segStart = events.length ? events[0].date : startOfDay(loan.startDate);
+  let principal = 0;
 
   const push = (end: Date, event: string) => {
     if (end <= segStart || principal <= 0) return;
@@ -229,16 +267,15 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
     segments.push({ from: segStart.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10), days, periods, principal, interest: round2(interest), event });
   };
 
-  for (const p of sorted) {
-    const pDate = startOfDay(p.paymentDate);
-    if (pDate <= segStart) {
-      principal = Math.max(0, principal - p.principalAmount);
+  for (const ev of events) {
+    if (ev.date <= segStart) {
+      principal = Math.max(0, principal + ev.delta);
       continue;
     }
-    if (pDate > now) break;
-    push(pDate, `Payment ${p.id}: −${formatCurrencyPlain(p.principalAmount)} principal`);
-    principal = Math.max(0, principal - p.principalAmount);
-    segStart = pDate;
+    if (ev.date > now) break;
+    push(ev.date, ev.label);
+    principal = Math.max(0, principal + ev.delta);
+    segStart = ev.date;
   }
   push(now, "Accruing (today)");
   return segments;
@@ -248,7 +285,7 @@ function formatCurrencyPlain(n: number): string {
   return "₹" + Math.round(n).toLocaleString("en-IN");
 }
 
-export function calculateCustomerSummary(loans: Loan[], paymentsByLoan: Map<string, Payment[]>): CustomerSummary {
+export function calculateCustomerSummary(loans: Loan[], paymentsByLoan: Map<string, Payment[]>, disbursementsByLoan?: Map<string, Disbursement[]>): CustomerSummary {
   const s: CustomerSummary = {
     totalBorrowed: 0,
     principalPaid: 0,
@@ -262,16 +299,18 @@ export function calculateCustomerSummary(loans: Loan[], paymentsByLoan: Map<stri
     overdueLoans: 0,
     totalLoans: loans.length,
     lastPaymentDate: null,
+    firstLoanDate: null,
   };
   for (const loan of loans) {
     const payments = paymentsByLoan.get(loan.id) ?? [];
-    const b = calculateLoanBalance(loan, payments);
+    const b = calculateLoanBalance(loan, payments, undefined, disbursementsByLoan?.get(loan.id));
     const st = getLoanStatus(loan, b);
     if (st === "CANCELLED") {
       s.principalPaid += b.principalPaid;
       s.interestPaid += b.interestPaid;
       continue;
     }
+    if (!s.firstLoanDate || loan.startDate < s.firstLoanDate) s.firstLoanDate = loan.startDate;
     s.totalBorrowed += b.principal;
     s.principalPaid += b.principalPaid;
     s.interestPaid += b.interestPaid;
@@ -291,7 +330,7 @@ export function calculateCustomerSummary(loans: Loan[], paymentsByLoan: Map<stri
   return s;
 }
 
-export function getDashboardStats(loans: Loan[], payments: Payment[], customerCount: number, todayStr: string): DashboardStats {
+export function getDashboardStats(loans: Loan[], payments: Payment[], customerCount: number, todayStr: string, disbursementsByLoan?: Map<string, Disbursement[]>): DashboardStats {
   const s: DashboardStats = {
     totalMoneyLent: 0,
     principalOutstanding: 0,
@@ -317,9 +356,9 @@ export function getDashboardStats(loans: Loan[], payments: Payment[], customerCo
   const t0 = startOfDay(new Date());
   for (const loan of loans) {
     if (loan.status === "CANCELLED") continue;
-    const b = calculateLoanBalance(loan, paymentsByLoan.get(loan.id) ?? []);
+    const b = calculateLoanBalance(loan, paymentsByLoan.get(loan.id) ?? [], undefined, disbursementsByLoan?.get(loan.id));
     const st = getLoanStatus(loan, b);
-    s.totalMoneyLent += b.principal;
+    s.totalMoneyLent += b.totalDisbursed;
     s.principalOutstanding += b.principalRemaining;
     s.interestEarned += b.interestAccrued;
     s.interestPending += b.interestRemaining;

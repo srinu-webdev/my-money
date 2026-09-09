@@ -6,7 +6,7 @@ import { requireAdminId } from "@/lib/auth";
 import { reminderSchema } from "@/lib/validations";
 import { logActivity, pushNotification } from "@/lib/log";
 import { calculateLoanBalance, getLoanStatus } from "@/lib/calculations";
-import { serializeLoan, serializePayment } from "@/lib/serialize";
+import { serializeDisbursement, serializeLoan, serializePayment } from "@/lib/serialize";
 import type { ActionResult } from "@/lib/types";
 
 // TODO(production): connect a real SMS / WhatsApp / Email provider here
@@ -36,17 +36,33 @@ export async function sendReminderAction(input: unknown): Promise<ActionResult> 
 
 export async function remindAllOverdueAction(): Promise<ActionResult<{ count: number }>> {
   await requireAdminId();
-  const [loans, payments, customers] = await Promise.all([prisma.loan.findMany(), prisma.payment.findMany(), prisma.customer.findMany()]);
+  const [loans, payments, disbursements, customers] = await Promise.all([
+    prisma.loan.findMany(),
+    prisma.payment.findMany(),
+    prisma.disbursement.findMany(),
+    prisma.customer.findMany(),
+  ]);
   const byLoan = new Map<string, typeof payments>();
   for (const p of payments) {
     const arr = byLoan.get(p.loanId) ?? [];
     arr.push(p);
     byLoan.set(p.loanId, arr);
   }
+  const disbByLoan = new Map<string, typeof disbursements>();
+  for (const disb of disbursements) {
+    const arr = disbByLoan.get(disb.loanId) ?? [];
+    arr.push(disb);
+    disbByLoan.set(disb.loanId, arr);
+  }
   const nameOf = new Map(customers.map((c) => [c.id, c.name]));
   const overdue = loans.filter((l) => {
     const loan = serializeLoan(l);
-    const bal = calculateLoanBalance(loan, (byLoan.get(l.id) ?? []).map(serializePayment));
+    const bal = calculateLoanBalance(
+      loan,
+      (byLoan.get(l.id) ?? []).map(serializePayment),
+      undefined,
+      (disbByLoan.get(l.id) ?? []).map(serializeDisbursement)
+    );
     return getLoanStatus(loan, bal) === "OVERDUE";
   });
   if (!overdue.length) return { ok: true, data: { count: 0 } };

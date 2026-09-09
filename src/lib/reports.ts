@@ -1,6 +1,6 @@
 import { addDays, parseDate, startOfDay } from "./dates";
 import { calculateLoanBalance, getLoanStatus } from "./calculations";
-import type { Customer, Loan, Payment } from "./types";
+import type { Customer, Disbursement, Loan, Payment } from "./types";
 
 export type ReportRangeKey = "today" | "7d" | "30d" | "this-month" | "last-month" | "this-year" | "all" | "custom";
 
@@ -62,7 +62,7 @@ export interface ReportData {
   periodPayments: Payment[];
 }
 
-export function computeReport(loans: Loan[], payments: Payment[], customers: Customer[], range: ReportRange): ReportData {
+export function computeReport(loans: Loan[], payments: Payment[], customers: Customer[], range: ReportRange, disbursements: Disbursement[] = []): ReportData {
   const active = loans.filter((l) => l.status !== "CANCELLED");
   const lentLoans = active.filter((l) => inRange(l.startDate, range));
   const periodPayments = payments.filter((p) => inRange(p.paymentDate, range));
@@ -74,12 +74,18 @@ export function computeReport(loans: Loan[], payments: Payment[], customers: Cus
     arr.push(p);
     paymentsByLoan.set(p.loanId, arr);
   }
+  const disbursementsByLoan = new Map<string, Disbursement[]>();
+  for (const d of disbursements) {
+    const arr = disbursementsByLoan.get(d.loanId) ?? [];
+    arr.push(d);
+    disbursementsByLoan.set(d.loanId, arr);
+  }
   let interestPending = 0;
   let principalOutstanding = 0;
   let overdue = 0;
   let overdueCount = 0;
   for (const l of active) {
-    const bal = calculateLoanBalance(l, paymentsByLoan.get(l.id) ?? []);
+    const bal = calculateLoanBalance(l, paymentsByLoan.get(l.id) ?? [], undefined, disbursementsByLoan.get(l.id));
     const st = getLoanStatus(l, bal);
     interestPending += bal.interestRemaining;
     principalOutstanding += bal.principalRemaining;
@@ -89,9 +95,18 @@ export function computeReport(loans: Loan[], payments: Payment[], customers: Cus
     }
   }
 
+  // "Money lent" in this period is actual cash handed over — every
+  // disbursement (initial or a later tranche) whose date falls in range,
+  // not just loans that were first created in range. A loan created last
+  // month with a second tranche given out this month correctly counts
+  // that tranche as lent this month.
+  const lentInRange = disbursements.length
+    ? disbursements.filter((d) => active.some((l) => l.id === d.loanId) && inRange(d.date, range))
+    : lentLoans.map((l) => ({ amount: l.principal, loanId: l.id }));
+
   return {
     range,
-    lent: lentLoans.reduce((s, l) => s + l.principal, 0),
+    lent: lentInRange.reduce((s, d) => s + d.amount, 0),
     lentCount: lentLoans.length,
     principalCollected: periodPayments.reduce((s, p) => s + p.principalAmount, 0),
     interestCollected: periodPayments.reduce((s, p) => s + p.interestAmount, 0),

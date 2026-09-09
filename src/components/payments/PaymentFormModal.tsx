@@ -14,7 +14,7 @@ import { getCustomerOptionsAction, getLoanForPaymentFormAction, getLoanOptionsAc
 import { calculateLoanBalance, computeAllocation, getLoanStatus } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 import { todayStr } from "@/lib/dates";
-import type { AllocationMode, Customer, Loan, Payment, PaymentMethod } from "@/lib/types";
+import type { AllocationMode, Customer, Disbursement, Loan, Payment, PaymentMethod } from "@/lib/types";
 
 const METHODS: PaymentMethod[] = ["Cash", "UPI", "Bank Transfer", "Cheque", "Other"];
 const ALLOC_OPTIONS: { value: AllocationMode; label: string }[] = [
@@ -34,7 +34,7 @@ function PaymentFormContent({ payment, defaultLoanId, defaultCustomerId, default
   const [customerId, setCustomerId] = useState(payment?.customerId ?? defaultCustomerId ?? "");
   const [loanId, setLoanId] = useState(payment?.loanId ?? defaultLoanId ?? "");
   const [loanOptions, setLoanOptions] = useState<LoanOption[]>([]);
-  const [loanDetail, setLoanDetail] = useState<{ loan: Loan; payments: Payment[] } | null>(null);
+  const [loanDetail, setLoanDetail] = useState<{ loan: Loan; payments: Payment[]; disbursements: Disbursement[] } | null>(null);
   const [amount, setAmount] = useState(String(payment?.amount ?? ""));
   const [paymentDate, setPaymentDate] = useState(payment?.paymentDate ?? todayStr());
   const [allocation, setAllocation] = useState<AllocationMode>(editing ? "custom" : defaultAllocation ?? "interest_principal");
@@ -73,12 +73,20 @@ function PaymentFormContent({ payment, defaultLoanId, defaultCustomerId, default
 
   const alloc = useMemo(() => {
     if (!loanDetail) return null;
-    return computeAllocation(loanDetail.loan, existingPayments, Number(amount) || 0, allocation, { interestAmount: Number(customInterest), principalAmount: Number(customPrincipal) }, paymentDate || todayStr());
+    return computeAllocation(
+      loanDetail.loan,
+      existingPayments,
+      Number(amount) || 0,
+      allocation,
+      { interestAmount: Number(customInterest), principalAmount: Number(customPrincipal) },
+      paymentDate || todayStr(),
+      loanDetail.disbursements
+    );
   }, [loanDetail, existingPayments, amount, allocation, customInterest, customPrincipal, paymentDate]);
 
   const loanStatus = useMemo(() => {
     if (!loanDetail) return null;
-    return getLoanStatus(loanDetail.loan, calculateLoanBalance(loanDetail.loan, existingPayments));
+    return getLoanStatus(loanDetail.loan, calculateLoanBalance(loanDetail.loan, existingPayments, undefined, loanDetail.disbursements));
   }, [loanDetail, existingPayments]);
 
   function submit(formData: FormData) {

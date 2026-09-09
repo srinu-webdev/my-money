@@ -64,6 +64,18 @@ export interface Payment {
   updatedAt: string;
 }
 
+// One actual handover of cash against a loan. Most loans have exactly
+// one, auto-created on the loan's start date; a loan disbursed in
+// tranches (agreed ₹1,00,000, given ₹50,000 now / ₹50,000 later) has more.
+export interface Disbursement {
+  id: string;
+  loanId: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  notes: string | null;
+  createdAt: string;
+}
+
 export interface Notification {
   id: string;
   type: string;
@@ -125,6 +137,8 @@ export interface LoanBalance {
   daysActive: number;
   daysOverdue: number;
   interestPerPeriod: number;
+  totalDisbursed: number; // sum of disbursement rows — what's actually been handed over so far
+  pendingDisbursement: number; // agreed principal not yet disbursed (0 for the common single-handover loan)
 }
 
 export interface LoanWithBalance extends Loan {
@@ -146,6 +160,11 @@ export interface CustomerSummary {
   overdueLoans: number;
   totalLoans: number;
   lastPaymentDate: string | null;
+  // Earliest start date among this customer's non-cancelled loans — shown
+  // on the customers table instead of the customer record's `createdAt`,
+  // which (especially for historical data entered in bulk on one day)
+  // doesn't reflect when money actually changed hands.
+  firstLoanDate: string | null;
 }
 
 export interface DashboardStats {

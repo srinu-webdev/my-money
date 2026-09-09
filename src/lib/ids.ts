@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 type Tx = Prisma.TransactionClient;
 
-const PREFIX = { customer: "CUS", loan: "LN", payment: "PAY" } as const;
+const PREFIX = { customer: "CUS", loan: "LN", payment: "PAY", disbursement: "DIS" } as const;
 
 /**
  * Atomically allocates the next formatted id (e.g. CUS-2026-0001) inside

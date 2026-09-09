@@ -6,9 +6,9 @@
 // only reach server data through an exported Server Action.
 
 import { requireAdminId } from "@/lib/auth";
-import { getAllCustomers, getAllLoansWithBalance, getCustomerById, getLoanById, getPaymentById, getPaymentsByLoan, getSettings } from "@/lib/queries";
+import { getAllCustomers, getAllLoansWithBalance, getCustomerById, getDisbursementsByLoan, getLoanById, getPaymentById, getPaymentsByLoan, getSettings } from "@/lib/queries";
 import { calculateLoanBalance } from "@/lib/calculations";
-import type { Loan, Payment } from "@/lib/types";
+import type { Disbursement, Loan, Payment } from "@/lib/types";
 
 export async function getCustomerOptionsAction() {
   await requireAdminId();
@@ -35,13 +35,13 @@ export async function getLoanOptionsAction(customerId?: string, includeLoanId?: 
     .map((l) => ({ loan: l as Loan, outstanding: l.balance.totalOutstanding }));
 }
 
-/** Loan + its full payment history, for computing a live allocation preview client-side with lib/calculations (no round-trip per keystroke). */
-export async function getLoanForPaymentFormAction(loanId: string): Promise<{ loan: Loan; payments: Payment[] } | null> {
+/** Loan + its full payment/disbursement history, for computing a live allocation preview client-side with lib/calculations (no round-trip per keystroke). */
+export async function getLoanForPaymentFormAction(loanId: string): Promise<{ loan: Loan; payments: Payment[]; disbursements: Disbursement[] } | null> {
   await requireAdminId();
   const loan = await getLoanById(loanId);
   if (!loan) return null;
-  const payments = await getPaymentsByLoan(loanId);
-  return { loan, payments };
+  const [payments, disbursements] = await Promise.all([getPaymentsByLoan(loanId), getDisbursementsByLoan(loanId)]);
+  return { loan, payments, disbursements };
 }
 
 /** Everything the reminder modal needs, fetched on demand from wherever a "Send Reminder" button lives. */
@@ -49,8 +49,13 @@ export async function getReminderContextAction(loanId: string) {
   await requireAdminId();
   const loan = await getLoanById(loanId);
   if (!loan) return null;
-  const [payments, customer, settings] = await Promise.all([getPaymentsByLoan(loanId), getCustomerById(loan.customerId), getSettings()]);
-  const balance = calculateLoanBalance(loan, payments);
+  const [payments, disbursements, customer, settings] = await Promise.all([
+    getPaymentsByLoan(loanId),
+    getDisbursementsByLoan(loanId),
+    getCustomerById(loan.customerId),
+    getSettings(),
+  ]);
+  const balance = calculateLoanBalance(loan, payments, undefined, disbursements);
   return { loan, balance, customerName: customer?.name ?? "Customer", businessName: settings.businessName };
 }
 
@@ -60,6 +65,8 @@ export async function getReceiptContextAction(paymentId: string) {
   const payment = await getPaymentById(paymentId);
   if (!payment) return null;
   const [loan, customer, settings] = await Promise.all([getLoanById(payment.loanId), getCustomerById(payment.customerId), getSettings()]);
-  const balance = loan ? calculateLoanBalance(loan, await getPaymentsByLoan(loan.id)) : null;
+  const balance = loan
+    ? calculateLoanBalance(loan, await getPaymentsByLoan(loan.id), undefined, await getDisbursementsByLoan(loan.id))
+    : null;
   return { payment, loan, customerName: customer?.name ?? "Customer", settings, outstandingAfter: balance?.totalOutstanding ?? null };
 }
