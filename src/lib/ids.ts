@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { businessNow } from "./dates";
 
 type Tx = Prisma.TransactionClient;
 
@@ -11,7 +12,10 @@ const PREFIX = { customer: "CUS", loan: "LN", payment: "PAY", disbursement: "DIS
  * roll back together.
  */
 export async function nextId(tx: Tx, type: keyof typeof PREFIX): Promise<string> {
-  const year = new Date().getFullYear();
+  // The server's clock is UTC; for the last ~5.5h of every IST day the ID
+  // prefix would otherwise stamp the WRONG (previous) year right at
+  // New Year's — businessNow() keeps IDs on the business's own calendar.
+  const year = businessNow().getFullYear();
   const key = `${type}_${year}`;
   const counter = await tx.counter.upsert({
     where: { key },

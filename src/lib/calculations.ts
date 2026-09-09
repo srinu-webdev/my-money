@@ -38,7 +38,7 @@
 // as before — the full principal is treated as handed over on the start
 // date.
 // =====================================================================
-import { addDays, daysBetween, parseDate, startOfDay, toISODate } from "./dates";
+import { addDays, businessNow, daysBetween, parseDate, startOfDay, toISODate } from "./dates";
 import type {
   AllocationMode,
   CustomerSummary,
@@ -272,7 +272,7 @@ export function interestPerPeriod(
 // cycle (not Daily Installment).
 export function nextMonthlyCollectionDate(startDateIso: string, asOfDate?: string | Date, collectionDayOverride?: number | null): { date: string; daysUntil: number } {
   const dueDay = collectionDayOverride ?? parseDate(startDateIso).getDate();
-  const t0 = startOfDay(asOfDate ?? new Date());
+  const t0 = startOfDay(asOfDate ?? businessNow());
   const start = startOfDay(startDateIso);
   const y = t0.getFullYear();
   const m = t0.getMonth();
@@ -298,7 +298,7 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
   // What's owed is measured against what's actually been handed over, not
   // the full agreed amount — money not yet disbursed isn't debt yet.
   const principalRemaining = Math.max(0, round2(totalDisbursed - principalPaid));
-  const breakdown = calculateInterestBreakdown(loan, asOfDate ?? new Date(), payments, disbursements);
+  const breakdown = calculateInterestBreakdown(loan, asOfDate ?? businessNow(), payments, disbursements);
   const interestAccrued = breakdown.total;
   const interestRemaining = Math.max(0, round2(interestAccrued - interestPaid));
   // Payments are assumed to settle the oldest debt first (completed
@@ -316,7 +316,7 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
   const sorted = [...payments].sort(
     (a, b) => parseDate(b.paymentDate).getTime() - parseDate(a.paymentDate).getTime()
   );
-  const today = new Date();
+  const today = businessNow();
   const due = parseDate(loan.dueDate);
   return {
     principal,
@@ -346,7 +346,7 @@ export function getLoanStatus(loan: Pick<Loan, "status" | "dueDate">, bal: LoanB
   if (loan.status === "CANCELLED") return "CANCELLED";
   if (bal.totalOutstanding <= 1) return "PAID";
   const due = parseDate(loan.dueDate);
-  if (due < startOfDay(new Date())) return "OVERDUE";
+  if (due < businessNow()) return "OVERDUE";
   // "Partially Paid" means actual progress toward closing the loan —
   // some of the PRINCIPAL is repaid. Regularly paying interest (the
   // normal, expected behaviour of an Interest Only loan) isn't partial
@@ -379,7 +379,7 @@ export function computeAllocation(
   const principalRemaining = Math.max(0, totalDisbursed - principalPaid);
   const interestRemaining = Math.max(
     0,
-    calculateInterestForLoan(loan, asOfDate ?? new Date(), existingPayments, disbursements) - interestPaid
+    calculateInterestForLoan(loan, asOfDate ?? businessNow(), existingPayments, disbursements) - interestPaid
   );
   amount = Number(amount) || 0;
   let interestAmount = 0;
@@ -439,7 +439,7 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
       .map((p) => ({ date: startOfDay(p.paymentDate), delta: -(Number(p.principalAmount) || 0), label: `Payment ${p.id}: −${formatCurrencyPlain(p.principalAmount)} principal` })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  const now = loan.status === "CANCELLED" && loan.cancelledAt ? startOfDay(loan.cancelledAt) : startOfDay(asOfDate ?? new Date());
+  const now = loan.status === "CANCELLED" && loan.cancelledAt ? startOfDay(loan.cancelledAt) : startOfDay(asOfDate ?? businessNow());
   const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
   let segStart = firstDate;
   let principal = 0;
@@ -582,9 +582,12 @@ export function getDashboardStats(loans: Loan[], payments: Payment[], customerCo
     arr.push(p);
     paymentsByLoan.set(p.loanId, arr);
   }
-  const in7 = new Date();
-  in7.setDate(in7.getDate() + 7);
-  const t0 = startOfDay(new Date());
+  // Derived from the passed-in `todayStr`, not a fresh `new Date()` — the
+  // caller already resolved "today" in the business timezone; a second,
+  // independent server-clock read here could silently disagree with it
+  // right around midnight IST.
+  const t0 = startOfDay(todayStr);
+  const in7 = addDays(t0, 7);
   for (const loan of loans) {
     if (loan.status === "CANCELLED") continue;
     const b = calculateLoanBalance(loan, paymentsByLoan.get(loan.id) ?? [], undefined, disbursementsByLoan?.get(loan.id));

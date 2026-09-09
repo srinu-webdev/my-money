@@ -1,4 +1,4 @@
-import { parseDate } from "./dates";
+import { businessNow, parseDate } from "./dates";
 
 export interface MonthBucket {
   y: number;
@@ -8,7 +8,7 @@ export interface MonthBucket {
 
 export function getLastNMonths(n: number): MonthBucket[] {
   const out: MonthBucket[] = [];
-  const now = new Date();
+  const now = businessNow();
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const label = d.toLocaleString("en-IN", { month: "short" }) + (d.getFullYear() !== now.getFullYear() ? ` '${String(d.getFullYear()).slice(2)}` : "");

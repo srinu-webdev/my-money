@@ -1,5 +1,5 @@
 import { getAllCustomers, getAllLoansWithBalance } from "@/lib/queries";
-import { addDays, todayStr, toISODate } from "@/lib/dates";
+import { addDays, businessNow, parseDate, todayStr, toISODate } from "@/lib/dates";
 import { nextMonthlyCollectionDate } from "@/lib/calculations";
 import { DuePaymentsSections, type DueItem } from "@/components/loans/DuePaymentsSections";
 import type { MonthlyDueItem } from "@/components/loans/MonthlyCollectionSection";
@@ -12,9 +12,8 @@ export default async function DuePaymentsPage() {
   const customers = new Map(customersList.map((c) => [c.id, c]));
 
   const today = todayStr();
-  const tomorrow = toISODate(addDays(new Date(), 1));
-  const t0 = new Date();
-  t0.setHours(0, 0, 0, 0);
+  const t0 = businessNow();
+  const tomorrow = toISODate(addDays(t0, 1));
 
   const todayItems: DueItem[] = [];
   const tomorrowItems: DueItem[] = [];
@@ -30,7 +29,10 @@ export default async function DuePaymentsPage() {
       }
     }
     if (loan.balance.totalOutstanding <= 0) continue;
-    const due = new Date(loan.dueDate);
+    // `new Date("2026-10-09")` parses as UTC midnight, not local — bare
+    // `new Date(isoString)` on a date-only string is exactly the trap the
+    // top of dates.ts warns about. parseDate is the safe one.
+    const due = parseDate(loan.dueDate);
     if (due < t0) continue;
     const days = Math.round((due.getTime() - t0.getTime()) / 86400000);
     const label = days === 0 ? "Today" : days === 1 ? "Tomorrow" : `in ${days} days`;

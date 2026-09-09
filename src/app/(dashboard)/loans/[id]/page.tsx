@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { formatCurrency } from "@/lib/format";
-import { daysBetween, formatDate, formatDateTime } from "@/lib/dates";
+import { businessNow, daysBetween, formatDate, formatDateTime } from "@/lib/dates";
 import { Wallet, Percent, CheckCircle2, Clock, TrendingUp, CreditCard, AlertTriangle, Info, HandCoins } from "lucide-react";
 import { LoanDetailTabs } from "@/components/loans/LoanDetailTabs";
 import { LoanDetailActions } from "@/components/loans/LoanDetailActions";
@@ -51,7 +51,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           const fullTermInterest = calculateInterestForLoan(loan, loan.dueDate, [], disbursements);
           const totalPayable = loan.principal + fullTermInterest;
           const dailyAmount = totalPayable / totalDays;
-          const daysElapsed = Math.min(totalDays, Math.max(0, daysBetween(loan.startDate, new Date())));
+          const daysElapsed = Math.min(totalDays, Math.max(0, daysBetween(loan.startDate, businessNow())));
           const expectedByNow = dailyAmount * daysElapsed;
           const aheadOrBehind = balance.totalPaid - expectedByNow;
           // A missed day doesn't just vanish — it rolls forward and stacks

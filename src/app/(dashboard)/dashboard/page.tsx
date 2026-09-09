@@ -8,7 +8,7 @@ import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { WelcomeToast } from "@/components/dashboard/WelcomeToast";
 import { formatCurrency } from "@/lib/format";
-import { formatDate } from "@/lib/dates";
+import { businessHour, businessNow, formatDate } from "@/lib/dates";
 import { Wallet, CreditCard, Percent, Clock, Wallet as WalletIcon, TrendingUp, Calendar, AlertTriangle } from "lucide-react";
 
 export const metadata = { title: "Dashboard — LendPro" };
@@ -24,7 +24,7 @@ export default async function DashboardPage() {
     getAllCustomers(),
   ]);
 
-  const hour = new Date().getHours();
+  const hour = businessHour();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const firstName = admin?.name.split(" ")[0] ?? "Admin";
 
@@ -57,7 +57,7 @@ export default async function DashboardPage() {
         <StatCard label="Interest Earned" value={formatCurrency(stats.interestEarned)} icon={Percent} tone="success" hint="Accrued to date on all loans" />
         <StatCard label="Interest Pending" value={formatCurrency(stats.interestPending)} icon={Clock} tone="warning" hint="Accrued but not yet collected" />
         <StatCard label="Total Collected" value={formatCurrency(stats.totalCollected)} icon={WalletIcon} tone="success" hint={`${payments.length} payments recorded`} />
-        <StatCard label="Today's Collection" value={formatCurrency(stats.todaysCollection)} icon={TrendingUp} tone="info" hint={formatDate(new Date())} />
+        <StatCard label="Today's Collection" value={formatCurrency(stats.todaysCollection)} icon={TrendingUp} tone="info" hint={formatDate(businessNow())} />
         <StatCard label="Upcoming Due" value={formatCurrency(stats.upcomingDue)} icon={Calendar} tone="warning" hint="Due within the next 7 days" />
         <StatCard label="Overdue Amount" value={formatCurrency(stats.overdueAmount)} icon={AlertTriangle} tone="danger" hint={`${stats.overdueLoans} overdue loan${stats.overdueLoans === 1 ? "" : "s"}`} />
       </div>

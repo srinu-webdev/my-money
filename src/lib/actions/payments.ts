@@ -10,7 +10,7 @@ import { logActivity, pushNotification } from "@/lib/log";
 import { calculateLoanBalance, computeAllocation } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 import { isoToDbDate, serializeDisbursement, serializeLoan, serializePayment } from "@/lib/serialize";
-import { parseDate, startOfDay } from "@/lib/dates";
+import { businessNow, parseDate } from "@/lib/dates";
 import type { ActionResult, Disbursement, Loan, Payment } from "@/lib/types";
 
 type Tx = Prisma.TransactionClient;
@@ -81,7 +81,7 @@ export async function createPaymentAction(input: unknown): Promise<ActionResult<
   if (!loanRow) return { ok: false, error: "Please select a valid loan." };
   if (loanRow.status === "CANCELLED") return { ok: false, error: "This loan is cancelled." };
   const loan = serializeLoan(loanRow);
-  if (parseDate(d.paymentDate) > startOfDay(new Date())) return { ok: false, error: "Payment date cannot be in the future." };
+  if (parseDate(d.paymentDate) > businessNow()) return { ok: false, error: "Payment date cannot be in the future." };
   if (parseDate(d.paymentDate) < parseDate(loan.startDate)) {
     return { ok: false, error: `Payment date cannot be before the loan start date.` };
   }
@@ -138,7 +138,7 @@ export async function updatePaymentAction(id: string, input: unknown): Promise<A
   const loanRow = await prisma.loan.findUnique({ where: { id: d.loanId } });
   if (!loanRow) return { ok: false, error: "Please select a valid loan." };
   const loan = serializeLoan(loanRow);
-  if (parseDate(d.paymentDate) > startOfDay(new Date())) return { ok: false, error: "Payment date cannot be in the future." };
+  if (parseDate(d.paymentDate) > businessNow()) return { ok: false, error: "Payment date cannot be in the future." };
 
   const others = (await prisma.payment.findMany({ where: { loanId: d.loanId, id: { not: id } } })).map(serializePayment);
   const disbursements = (await prisma.disbursement.findMany({ where: { loanId: d.loanId } })).map(serializeDisbursement);
