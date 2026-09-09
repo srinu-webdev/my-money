@@ -194,10 +194,12 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                       </Td>
                       <Td>
                         {formatCurrency(b.interestAccrued)}
-                        {b.interestPerPeriod > 0 && b.interestAccrued > 0 ? (
-                          <div className="text-xs font-normal text-text-tertiary">
-                            ≈{Math.round(b.interestAccrued / b.interestPerPeriod)} full period{Math.round(b.interestAccrued / b.interestPerPeriod) === 1 ? "" : "s"} owed, not prorated by day
+                        {b.interestPerPeriod > 0 && b.interestRemaining > 0 ? (
+                          <div className="text-xs font-normal text-warning-dark">
+                            {Math.round(b.interestRemaining / b.interestPerPeriod)} month{Math.round(b.interestRemaining / b.interestPerPeriod) === 1 ? "" : "s"} pending · {formatCurrency(b.interestRemaining)}
                           </div>
+                        ) : b.interestAccrued > 0 ? (
+                          <div className="text-xs font-normal text-success-dark">Interest fully paid</div>
                         ) : null}
                       </Td>
                       <Td className="text-success-dark">{formatCurrency(b.interestPaid)}</Td>
