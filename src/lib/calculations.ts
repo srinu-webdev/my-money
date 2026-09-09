@@ -100,6 +100,8 @@ export interface InterestBreakdown {
   total: number;
   /** Just the fully-completed-and-still-unpaid-period portion of `total` — used to tell "N whole months genuinely pending" apart from today's still-growing partial-period slice, which isn't a missed/overdue month yet. */
   whole: number;
+  /** The date the CURRENT (still-running) period began — everything before it is a fully-completed prior period. Used to figure out what's "this month's" interest and payments, separate from the loan's lifetime totals. */
+  currentPeriodStart: string;
 }
 
 export function calculateInterestBreakdown(
@@ -130,7 +132,7 @@ export function calculateInterestBreakdown(
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
-  if (asOf <= firstDate) return { total: 0, whole: 0 };
+  if (asOf <= firstDate) return { total: 0, whole: 0, currentPeriodStart: toISODate(firstDate) };
 
   let segStart = firstDate;
   let bal = 0;
@@ -177,7 +179,8 @@ export function calculateInterestBreakdown(
     fractional = loan.interestType === "FIXED" ? rate * fraction : bal * (rate / 100) * fraction;
   }
 
-  return { total: Math.max(0, round2(whole + fractional)), whole: Math.max(0, round2(whole)) };
+  const currentPeriodStart = toISODate(addDays(firstDate, periodsCharged * periodDays));
+  return { total: Math.max(0, round2(whole + fractional)), whole: Math.max(0, round2(whole)), currentPeriodStart };
 }
 
 export function calculateInterestForLoan(
@@ -235,6 +238,12 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
   // periods before today's still-growing partial one) — the natural,
   // sensible order, and matches how interest allocation already works.
   const interestPendingWhole = Math.max(0, round2(breakdown.whole - interestPaid));
+  // "This month" = the period currently running (strictly after
+  // currentPeriodStart, up to today) — separate from the loan's lifetime
+  // totals, for a per-cycle view of what's due right now vs already
+  // settled. A payment dated ON the boundary itself is treated as
+  // settling the period that just ended, not prepaying the new one.
+  const interestPaidThisPeriod = round2(sum(payments.filter((p) => p.paymentDate > breakdown.currentPeriodStart), (p) => p.interestAmount));
   const totalPaid = round2(principalPaid + interestPaid);
   const totalOutstanding = round2(principalRemaining + interestRemaining);
   const sorted = [...payments].sort(
@@ -260,6 +269,7 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
     totalDisbursed,
     pendingDisbursement,
     interestPendingWhole,
+    interestPaidThisPeriod,
   };
 }
 
@@ -270,7 +280,11 @@ export function getLoanStatus(loan: Pick<Loan, "status" | "dueDate">, bal: LoanB
   if (bal.totalOutstanding <= 1) return "PAID";
   const due = parseDate(loan.dueDate);
   if (due < startOfDay(new Date())) return "OVERDUE";
-  if (bal.totalPaid > 0) return "PARTIALLY_PAID";
+  // "Partially Paid" means actual progress toward closing the loan —
+  // some of the PRINCIPAL is repaid. Regularly paying interest (the
+  // normal, expected behaviour of an Interest Only loan) isn't partial
+  // progress toward anything; it stays "Active" until principal moves.
+  if (bal.principalPaid > 0) return "PARTIALLY_PAID";
   return "ACTIVE";
 }
 

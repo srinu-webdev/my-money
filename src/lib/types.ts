@@ -144,6 +144,11 @@ export interface LoanBalance {
   // share, so "N months pending" never counts a period that hasn't
   // actually finished yet (a loan taken 3 days ago shows 0 here).
   interestPendingWhole: number;
+  // How much of the CURRENT (still-running) period's interest has been
+  // paid so far — a per-cycle figure, separate from `interestPaid`
+  // (the loan's lifetime total). `interestPerPeriod` is what's due for
+  // this same period, so the two together read as "paid X of Y this month".
+  interestPaidThisPeriod: number;
 }
 
 export interface LoanWithBalance extends Loan {

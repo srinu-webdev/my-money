@@ -155,8 +155,8 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                   <Th>Rate</Th>
                   <Th>Frequency</Th>
                   <SortTh label="Start" active={field === "startDate"} dir={dir} onClick={() => toggle("startDate")} />
-                  <Th>Interest Accrued</Th>
-                  <Th>Interest Paid</Th>
+                  <Th>Interest This Month</Th>
+                  <Th>Paid This Month</Th>
                   <Th>Principal Paid</Th>
                   <Th>Principal Remaining</Th>
                   <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} />
@@ -188,18 +188,18 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                       <Td>{FREQ_LABEL[l.interestFrequency]}</Td>
                       <Td className="text-text-secondary">{formatDate(l.startDate)}</Td>
                       <Td>
-                        {formatCurrency(b.interestAccrued)}
+                        {formatCurrency(b.interestPerPeriod)}
                         {b.interestPendingWhole > 0.01 ? (
                           <div className="text-xs font-normal text-warning-dark">
-                            {Math.round(b.interestPendingWhole / b.interestPerPeriod)} month{Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1 ? "" : "s"} pending · {formatCurrency(b.interestPendingWhole)}
+                            +{Math.round(b.interestPendingWhole / b.interestPerPeriod)} older month{Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1 ? "" : "s"} also pending · {formatCurrency(b.interestPendingWhole)}
                           </div>
-                        ) : b.interestRemaining > 0.01 && l.interestFrequency === "MONTHLY" ? (
-                          <div className="text-xs font-normal text-text-tertiary">Next due {formatDate(nextMonthlyCollectionDate(l.startDate).date)}</div>
-                        ) : b.interestAccrued > 0 ? (
-                          <div className="text-xs font-normal text-success-dark">Interest fully paid</div>
+                        ) : b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
+                          <div className="text-xs font-normal text-text-tertiary">Due {formatDate(nextMonthlyCollectionDate(l.startDate).date)}</div>
                         ) : null}
                       </Td>
-                      <Td className="text-success-dark">{formatCurrency(b.interestPaid)}</Td>
+                      <Td className={b.interestPaidThisPeriod >= b.interestPerPeriod && b.interestPerPeriod > 0 ? "text-success-dark font-semibold" : "text-success-dark"}>
+                        {formatCurrency(b.interestPaidThisPeriod)}
+                      </Td>
                       <Td className="text-success-dark">{formatCurrency(b.principalPaid)}</Td>
                       <Td>{formatCurrency(b.principalRemaining)}</Td>
                       <Td className={`font-semibold ${b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
