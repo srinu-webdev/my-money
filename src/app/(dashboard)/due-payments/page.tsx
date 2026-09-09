@@ -1,30 +1,11 @@
 import { getAllCustomers, getAllLoansWithBalance } from "@/lib/queries";
-import { addDays, parseDate, todayStr, toISODate } from "@/lib/dates";
+import { addDays, todayStr, toISODate } from "@/lib/dates";
+import { nextMonthlyCollectionDate } from "@/lib/calculations";
 import { DuePaymentsSections, type DueItem } from "@/components/loans/DuePaymentsSections";
 import type { MonthlyDueItem } from "@/components/loans/MonthlyCollectionSection";
 
 export const metadata = { title: "Due Payments — LendPro" };
 export const dynamic = "force-dynamic";
-
-// The day-of-month a loan started on doubles as its recurring monthly
-// collection day (a loan given on the 10th is collected on the 10th every
-// month after) — this finds the NEXT occurrence of that day from today,
-// clamping to the last day of a shorter month (e.g. a "31st" loan is
-// collected on the 28th/29th in February).
-function nextCollectionDay(startDateIso: string, t0: Date): { dueDay: number; daysUntil: number } {
-  const start = parseDate(startDateIso);
-  const dueDay = start.getDate();
-  const y = t0.getFullYear();
-  const m = t0.getMonth();
-  const clampedThisMonth = Math.min(dueDay, new Date(y, m + 1, 0).getDate());
-  let candidate = new Date(y, m, clampedThisMonth);
-  if (candidate < t0) {
-    const clampedNextMonth = Math.min(dueDay, new Date(y, m + 2, 0).getDate());
-    candidate = new Date(y, m + 1, clampedNextMonth);
-  }
-  const daysUntil = Math.round((candidate.getTime() - t0.getTime()) / 86400000);
-  return { dueDay, daysUntil };
-}
 
 export default async function DuePaymentsPage() {
   const [loans, customersList] = await Promise.all([getAllLoansWithBalance(), getAllCustomers()]);
@@ -43,9 +24,9 @@ export default async function DuePaymentsPage() {
   for (const loan of loans) {
     if (loan.derivedStatus === "PAID" || loan.derivedStatus === "CANCELLED") continue;
     if (loan.interestFrequency === "MONTHLY" && loan.repaymentType !== "Daily Installment") {
-      const { dueDay, daysUntil } = nextCollectionDay(loan.startDate, t0);
+      const { date: nextDueDate, daysUntil } = nextMonthlyCollectionDate(loan.startDate, t0);
       if (loan.balance.interestPendingWhole > 0.01 || (daysUntil >= 0 && daysUntil <= 5)) {
-        monthlyItems.push({ loan, dueDay, daysUntil });
+        monthlyItems.push({ loan, nextDueDate, daysUntil });
       }
     }
     if (loan.balance.totalOutstanding <= 0) continue;

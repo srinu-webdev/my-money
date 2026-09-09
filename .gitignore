@@ -42,3 +42,5 @@ next-env.d.ts
 
 # stray log files from local dev sessions
 *.log
+
+.vercel

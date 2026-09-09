@@ -197,6 +197,28 @@ export function interestPerPeriod(
   return loan.interestType === "FIXED" ? rate : (principal * rate) / 100;
 }
 
+// A loan's day-of-month at disbursement doubles as its recurring monthly
+// collection day (given on the 10th -> collected on the 10th every month
+// after). Finds the NEXT occurrence of that day from `asOfDate`, clamped
+// to the last day of a shorter month (a "31st" loan collects on the
+// 28th/29th in February). Only meaningful for MONTHLY-frequency loans
+// with a recurring collection cycle (not Daily Installment).
+export function nextMonthlyCollectionDate(startDateIso: string, asOfDate?: string | Date): { date: string; daysUntil: number } {
+  const start = parseDate(startDateIso);
+  const dueDay = start.getDate();
+  const t0 = startOfDay(asOfDate ?? new Date());
+  const y = t0.getFullYear();
+  const m = t0.getMonth();
+  const clampedThisMonth = Math.min(dueDay, new Date(y, m + 1, 0).getDate());
+  let candidate = new Date(y, m, clampedThisMonth);
+  if (candidate < t0) {
+    const clampedNextMonth = Math.min(dueDay, new Date(y, m + 2, 0).getDate());
+    candidate = new Date(y, m + 1, clampedNextMonth);
+  }
+  const daysUntil = Math.round((candidate.getTime() - t0.getTime()) / 86400000);
+  return { date: toISODate(candidate), daysUntil };
+}
+
 export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?: string | Date, disbursements?: Disbursement[]): LoanBalance {
   const principal = Number(loan.principal) || 0;
   const totalDisbursed = round2(sum(effectiveDisbursements(loan, disbursements), (d) => d.amount));

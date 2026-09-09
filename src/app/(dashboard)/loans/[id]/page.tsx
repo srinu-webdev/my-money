@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getActivitiesFor, getCustomerById, getDisbursementsByLoan, getLoanById, getPaymentsByLoan } from "@/lib/queries";
-import { calculateInterestForLoan, calculateLoanBalance, getLoanSchedule, getLoanStatus, FREQ_LABEL, FREQ_NOUN } from "@/lib/calculations";
+import { calculateInterestForLoan, calculateLoanBalance, getLoanSchedule, getLoanStatus, nextMonthlyCollectionDate, FREQ_LABEL, FREQ_NOUN } from "@/lib/calculations";
 import { CalendarClock } from "lucide-react";
 import { StatusBadge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
@@ -183,8 +183,8 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           hint={
             balance.interestPendingWhole > 0.01
               ? `${formatCurrency(balance.interestPendingWhole)} in fully-completed period(s), rest still accruing`
-              : balance.interestRemaining > 0.01
-                ? `still accruing this ${FREQ_NOUN[loan.interestFrequency]} — no full period pending yet`
+              : balance.interestRemaining > 0.01 && loan.interestFrequency === "MONTHLY"
+                ? `Next due ${formatDate(nextMonthlyCollectionDate(loan.startDate).date)}`
                 : undefined
           }
         />

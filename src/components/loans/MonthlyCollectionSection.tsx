@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { usePaymentFormModal } from "@/components/payments/PaymentFormModal";
 import { SendReminderButton } from "@/components/loans/ReminderFormModal";
 import { formatCurrency } from "@/lib/format";
+import { formatDate } from "@/lib/dates";
 import type { LoanRow } from "@/lib/queries";
 import type { Customer } from "@/lib/types";
 
@@ -20,7 +21,7 @@ import type { Customer } from "@/lib/types";
 // it's about which day of THIS month to go collect from whom.
 export interface MonthlyDueItem {
   loan: LoanRow;
-  dueDay: number;
+  nextDueDate: string; // ISO date of the next occurrence of the collection day
   daysUntil: number; // 0 = today, negative not used (wraps to next month)
 }
 
@@ -56,14 +57,14 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
               <Th>Customer</Th>
               <Th>Phone</Th>
               <Th>Loan ID</Th>
-              <Th>Collection Day</Th>
+              <Th>Next Due</Th>
               <Th>Amount</Th>
               <Th>Status</Th>
               <Th />
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ loan: l, dueDay, daysUntil }) => {
+            {rows.map(({ loan: l, nextDueDate, daysUntil }) => {
               const c = customers.get(l.customerId);
               const pendingWhole = l.balance.interestPendingWhole;
               const overdueMonths = Math.round(pendingWhole / (l.balance.interestPerPeriod || pendingWhole || 1));
@@ -83,7 +84,7 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
                       {l.id}
                     </Link>
                   </Td>
-                  <Td className="text-text-secondary">Every {dueDay}{dueDay === 1 || dueDay === 21 || dueDay === 31 ? "st" : dueDay === 2 || dueDay === 22 ? "nd" : dueDay === 3 || dueDay === 23 ? "rd" : "th"}</Td>
+                  <Td className="text-text-secondary">{formatDate(nextDueDate)}</Td>
                   <Td className="font-bold">{formatCurrency(pendingWhole > 0.01 ? pendingWhole : l.balance.interestPerPeriod)}</Td>
                   <Td className={pendingWhole > 0.01 ? "text-danger font-semibold" : daysUntil === 0 ? "text-warning-dark font-semibold" : "text-text-secondary"}>
                     {pendingWhole > 0.01 ? (

@@ -11,7 +11,7 @@ import { ActivityList } from "@/components/dashboard/ActivityList";
 import { CustomerPaymentCalendar } from "./CustomerPaymentCalendar";
 import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/dates";
-import { FREQ_LABEL, FREQ_NOUN } from "@/lib/calculations";
+import { FREQ_LABEL, nextMonthlyCollectionDate } from "@/lib/calculations";
 import type { CustomerRow, LoanRow } from "@/lib/queries";
 import type { Activity, Payment } from "@/lib/types";
 import { CreditCard, Percent, Wallet } from "lucide-react";
@@ -217,8 +217,8 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                         <div className="text-xs font-normal text-warning-dark">
                           {Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod)} month{Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod) === 1 ? "" : "s"} pending
                         </div>
-                      ) : l.balance.interestRemaining > 0.01 ? (
-                        <div className="text-xs font-normal text-text-tertiary">accruing this {FREQ_NOUN[l.interestFrequency]}</div>
+                      ) : l.balance.interestRemaining > 0.01 && l.interestFrequency === "MONTHLY" ? (
+                        <div className="text-xs font-normal text-text-tertiary">Next due {formatDate(nextMonthlyCollectionDate(l.startDate).date)}</div>
                       ) : l.balance.interestAccrued > 0 ? (
                         <div className="text-xs font-normal text-success-dark">fully paid</div>
                       ) : null}

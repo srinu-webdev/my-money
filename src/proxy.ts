@@ -23,6 +23,14 @@ async function hasValidSession(req: NextRequest): Promise<boolean> {
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Vercel Cron calls this server-to-server with no session cookie at
+  // all — it authenticates itself via the route's own CRON_SECRET check,
+  // so it must never hit the login redirect meant for browser sessions.
+  if (pathname.startsWith("/api/cron/")) {
+    return NextResponse.next();
+  }
+
   const authed = await hasValidSession(req);
 
   if ((pathname === "/login" || pathname === "/signup") && authed) {
