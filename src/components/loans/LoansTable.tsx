@@ -155,7 +155,6 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                   <Th>Rate</Th>
                   <Th>Frequency</Th>
                   <SortTh label="Start" active={field === "startDate"} dir={dir} onClick={() => toggle("startDate")} />
-                  <SortTh label="Due" active={field === "dueDate"} dir={dir} onClick={() => toggle("dueDate")} />
                   <Th>Interest Accrued</Th>
                   <Th>Interest Paid</Th>
                   <Th>Principal Paid</Th>
@@ -188,10 +187,6 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                       <Td>{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
                       <Td>{FREQ_LABEL[l.interestFrequency]}</Td>
                       <Td className="text-text-secondary">{formatDate(l.startDate)}</Td>
-                      <Td className={l.derivedStatus === "OVERDUE" ? "text-danger font-semibold" : "text-text-secondary"}>
-                        {formatDate(l.dueDate)}
-                        {b.daysOverdue ? <div className="text-xs font-normal">{b.daysOverdue}d overdue</div> : null}
-                      </Td>
                       <Td>
                         {formatCurrency(b.interestAccrued)}
                         {b.interestPerPeriod > 0 && b.interestRemaining > 0 ? (
@@ -208,6 +203,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                       <Td className={`font-semibold ${b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
                       <Td>
                         <StatusBadge status={l.derivedStatus} />
+                        {b.daysOverdue ? <div className="text-xs font-normal text-danger mt-0.5">{b.daysOverdue}d overdue · due {formatDate(l.dueDate)}</div> : null}
                       </Td>
                       <Td>
                         <Dropdown
