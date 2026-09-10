@@ -49,8 +49,8 @@ export function LoanDetailTabs({ payments, schedule, activities, interestAccrued
                   <Th>From</Th>
                   <Th>To</Th>
                   <Th>Duration</Th>
-                  <Th>Principal Balance</Th>
-                  <Th>Interest</Th>
+                  <Th className="text-right">Principal Balance</Th>
+                  <Th className="text-right">Interest</Th>
                   <Th>Event</Th>
                 </tr>
               </thead>
@@ -61,8 +61,8 @@ export function LoanDetailTabs({ payments, schedule, activities, interestAccrued
                       <Td>{formatDate(s.from)}</Td>
                       <Td>{formatDate(s.to)}</Td>
                       <Td>{s.periods > 0 ? `${s.days} d (${s.periods} full period${s.periods === 1 ? "" : "s"} owed)` : `${s.days} d (in progress, not yet a full period)`}</Td>
-                      <Td>{formatCurrency(s.principal)}</Td>
-                      <Td>{formatCurrency(s.interest)}</Td>
+                      <Td className="text-right mono-nums">{formatCurrency(s.principal)}</Td>
+                      <Td className="text-right mono-nums">{formatCurrency(s.interest)}</Td>
                       <Td className="text-text-secondary">{s.event}</Td>
                     </tr>
                   ))
@@ -77,7 +77,7 @@ export function LoanDetailTabs({ payments, schedule, activities, interestAccrued
                   <Td colSpan={4} className="font-bold">
                     Total interest accrued
                   </Td>
-                  <Td className="font-bold">{formatCurrency(interestAccrued)}</Td>
+                  <Td className="text-right mono-nums font-bold">{formatCurrency(interestAccrued)}</Td>
                   <Td />
                 </tr>
               </tbody>

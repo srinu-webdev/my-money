@@ -126,8 +126,8 @@ function sum<T>(arr: T[], fn: (x: T) => number): number {
 type DisbursementLike = Pick<Disbursement, "date" | "amount">;
 type PaymentLike = Pick<Payment, "paymentDate" | "principalAmount">;
 
-/** Disbursement rows if any exist, otherwise a single synthesized handover of the full principal on the start date — keeps every caller that doesn't know about tranches working unchanged. */
-function effectiveDisbursements(loan: Pick<Loan, "principal" | "startDate">, disbursements?: DisbursementLike[]): DisbursementLike[] {
+/** Disbursement rows if any exist, otherwise a single synthesized handover of the full principal on the start date — keeps every caller that doesn't know about tranches working unchanged. Exported so UI code (e.g. a "recent transactions" feed) can show the real disbursal event for the common single-handover loan too, not just loans with explicit tranche rows. */
+export function effectiveDisbursements(loan: Pick<Loan, "principal" | "startDate">, disbursements?: DisbursementLike[]): DisbursementLike[] {
   if (disbursements && disbursements.length) return disbursements;
   return [{ date: loan.startDate, amount: loan.principal }];
 }
@@ -289,7 +289,20 @@ export function nextMonthlyCollectionDate(startDateIso: string, asOfDate?: strin
   return { date: toISODate(candidate), daysUntil };
 }
 
+// A completed monthly period's interest is genuinely owed from the moment
+// its due date arrives — that's real accrual and isn't touched here. But
+// the lender doesn't consider a payment actually *late* the instant the
+// due date starts; in practice there's a few days' grace before it reads
+// as "pending"/overdue rather than merely "due today". This only affects
+// interestPendingWhole (the "N whole months genuinely pending" flag used
+// for status and "X months pending" displays everywhere) — interestAccrued
+// / interestRemaining / totalOutstanding keep accruing exactly as before,
+// so the amount owed is never understated during the grace window, only
+// the "this is now delinquent" label is held back briefly.
+const MONTHLY_INTEREST_GRACE_DAYS = 5;
+
 export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?: string | Date, disbursements?: Disbursement[]): LoanBalance {
+  const today = startOfDay(asOfDate ?? businessNow());
   const principal = Number(loan.principal) || 0;
   const totalDisbursed = round2(sum(effectiveDisbursements(loan, disbursements), (d) => d.amount));
   const pendingDisbursement = Math.max(0, round2(principal - totalDisbursed));
@@ -298,13 +311,15 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
   // What's owed is measured against what's actually been handed over, not
   // the full agreed amount — money not yet disbursed isn't debt yet.
   const principalRemaining = Math.max(0, round2(totalDisbursed - principalPaid));
-  const breakdown = calculateInterestBreakdown(loan, asOfDate ?? businessNow(), payments, disbursements);
+  const breakdown = calculateInterestBreakdown(loan, today, payments, disbursements);
   const interestAccrued = breakdown.total;
   const interestRemaining = Math.max(0, round2(interestAccrued - interestPaid));
   // Payments are assumed to settle the oldest debt first (completed
   // periods before today's still-growing partial one) — the natural,
   // sensible order, and matches how interest allocation already works.
-  const interestPendingWhole = Math.max(0, round2(breakdown.whole - interestPaid));
+  const rawInterestPendingWhole = Math.max(0, round2(breakdown.whole - interestPaid));
+  const daysSincePeriodEnded = rawInterestPendingWhole > 0.01 ? daysBetween(breakdown.currentPeriodStart, today) : 0;
+  const interestPendingWhole = daysSincePeriodEnded > MONTHLY_INTEREST_GRACE_DAYS ? rawInterestPendingWhole : 0;
   // "This month" = the period currently running (strictly after
   // currentPeriodStart, up to today) — separate from the loan's lifetime
   // totals, for a per-cycle view of what's due right now vs already
@@ -316,7 +331,6 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
   const sorted = [...payments].sort(
     (a, b) => parseDate(b.paymentDate).getTime() - parseDate(a.paymentDate).getTime()
   );
-  const today = businessNow();
   const due = parseDate(loan.dueDate);
   return {
     principal,
@@ -331,7 +345,11 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
     lastPaymentDate: sorted[0]?.paymentDate ?? null,
     lastPaymentAmount: sorted[0]?.amount ?? 0,
     daysActive: Math.max(0, daysBetween(loan.startDate, today)),
-    daysOverdue: due && due < startOfDay(today) && totalOutstanding > 0 ? daysBetween(due, today) : 0,
+    // Overdue on the final due date takes priority; otherwise, if a whole
+    // completed interest period is still unpaid, "overdue" means overdue
+    // since that period's own boundary (breakdown.currentPeriodStart is
+    // exactly when it ended), not the loan's far-off final due date.
+    daysOverdue: due && due < today && totalOutstanding > 0 ? daysBetween(due, today) : interestPendingWhole > 0.01 ? daysSincePeriodEnded : 0,
     interestPerPeriod: interestPerPeriod(loan, principalRemaining),
     totalDisbursed,
     pendingDisbursement,
@@ -347,6 +365,18 @@ export function getLoanStatus(loan: Pick<Loan, "status" | "dueDate">, bal: LoanB
   if (bal.totalOutstanding <= 1) return "PAID";
   const due = parseDate(loan.dueDate);
   if (due < businessNow()) return "OVERDUE";
+  // A loan can also be overdue on a recurring interest installment well
+  // before its own final term ends — a full period that's already
+  // finished with its interest still entirely unpaid (interestPendingWhole)
+  // means a payment was actually missed, not just "not due yet". Flagging
+  // this as OVERDUE (rather than leaving it "Active" with a small caption
+  // most people scanning a status column would miss) is what a lender
+  // actually needs to see. interestPendingWhole already holds off for
+  // MONTHLY_INTEREST_GRACE_DAYS past the due date before counting a period
+  // as genuinely pending, so a payment due today isn't instantly flagged.
+  // This doesn't touch how interest accrues or is allocated — only how the
+  // already-correct numbers get classified.
+  if (bal.interestPendingWhole > 0.01) return "OVERDUE";
   // "Partially Paid" means actual progress toward closing the loan —
   // some of the PRINCIPAL is repaid. Regularly paying interest (the
   // normal, expected behaviour of an Interest Only loan) isn't partial
@@ -570,6 +600,7 @@ export function getDashboardStats(loans: Loan[], payments: Payment[], customerCo
     totalCollected: 0,
     todaysCollection: 0,
     upcomingDue: 0,
+    upcomingDueLoans: 0,
     overdueAmount: 0,
     activeLoans: 0,
     overdueLoans: 0,
@@ -604,7 +635,10 @@ export function getDashboardStats(loans: Loan[], payments: Payment[], customerCo
     } else {
       s.activeLoans++;
       const d = parseDate(loan.dueDate);
-      if (d >= t0 && d <= in7) s.upcomingDue += b.totalOutstanding;
+      if (d >= t0 && d <= in7) {
+        s.upcomingDue += b.totalOutstanding;
+        s.upcomingDueLoans++;
+      }
     }
   }
   s.totalCollected = sum(payments, (p) => p.amount);

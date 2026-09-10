@@ -18,7 +18,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { usePagination, useSort } from "@/lib/hooks/useTableState";
 import { formatCurrency } from "@/lib/format";
-import { formatDate } from "@/lib/dates";
+import { businessToday, formatDate } from "@/lib/dates";
 import { FREQ_LABEL, STATUS_LABEL, nextMonthlyCollectionDate } from "@/lib/calculations";
 import type { LoanRow } from "@/lib/queries";
 import type { LoanStatus } from "@/lib/types";
@@ -134,7 +134,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
           />
         </div>
         <PillTabs
-          tabs={FILTERS.map((f) => ({ key: f.key, label: `${f.label} ${counts[f.key] ?? 0}` }))}
+          tabs={FILTERS.map((f) => ({ key: f.key, label: `${f.label} ${counts[f.key] ?? 0}`, muted: f.key !== "all" && !(counts[f.key] ?? 0) }))}
           active={filter}
           onChange={(k) => {
             setFilter(k as LoanStatus | "all");
@@ -151,14 +151,14 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                 <tr>
                   <SortTh label="Loan ID" active={field === "id"} dir={dir} onClick={() => toggle("id", true)} />
                   <SortTh label="Customer" active={field === "customer"} dir={dir} onClick={() => toggle("customer", true)} />
-                  <SortTh label="Principal" active={field === "principal"} dir={dir} onClick={() => toggle("principal")} className="hidden sm:table-cell" />
-                  <Th className="hidden sm:table-cell">Rate</Th>
+                  <SortTh label="Principal" active={field === "principal"} dir={dir} onClick={() => toggle("principal")} className="hidden sm:table-cell text-right" />
+                  <Th className="hidden sm:table-cell text-right">Rate</Th>
                   <Th className="hidden md:table-cell">Frequency</Th>
                   <SortTh label="Start" active={field === "startDate"} dir={dir} onClick={() => toggle("startDate")} className="hidden md:table-cell" />
-                  <Th className="hidden lg:table-cell">Interest This Month</Th>
-                  <Th className="hidden lg:table-cell">Paid This Month</Th>
-                  <Th className="hidden lg:table-cell">Principal Paid</Th>
-                  <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} />
+                  <Th className="hidden lg:table-cell text-right">Interest This Month</Th>
+                  <Th className="hidden lg:table-cell text-right">Paid This Month</Th>
+                  <Th className="hidden lg:table-cell text-right">Principal Paid</Th>
+                  <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} className="text-right" />
                   <Th>Status</Th>
                   <Th />
                 </tr>
@@ -182,15 +182,15 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                           </Link>
                         </div>
                       </Td>
-                      <Td className="hidden sm:table-cell font-semibold">{formatCurrency(l.principal)}</Td>
-                      <Td className="hidden sm:table-cell">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
+                      <Td className="hidden sm:table-cell text-right mono-nums font-semibold">{formatCurrency(l.principal)}</Td>
+                      <Td className="hidden sm:table-cell text-right mono-nums">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
                       <Td className="hidden md:table-cell">{FREQ_LABEL[l.interestFrequency]}</Td>
                       <Td className="hidden md:table-cell text-text-secondary">{formatDate(l.startDate)}</Td>
-                      <Td className="hidden lg:table-cell">
+                      <Td className="hidden lg:table-cell text-right">
                         {/* Everything stays on ONE line so every row is the same height —
                             a second line here made rows with a due date taller than the rest. */}
                         <span className="inline-flex items-baseline gap-1.5">
-                          {formatCurrency(b.interestPerPeriod)}
+                          <span className="mono-nums">{formatCurrency(b.interestPerPeriod)}</span>
                           {b.interestPendingWhole > 0.01 ? (
                             <span className="text-xs font-normal text-warning-dark">
                               · {Math.round(b.interestPendingWhole / b.interestPerPeriod)} older month{Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1 ? "" : "s"} pending ({formatCurrency(b.interestPendingWhole)})
@@ -200,11 +200,11 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                           ) : null}
                         </span>
                       </Td>
-                      <Td className={`hidden lg:table-cell ${b.interestPaidThisPeriod >= b.interestPerPeriod && b.interestPerPeriod > 0 ? "text-success-dark font-semibold" : "text-success-dark"}`}>
+                      <Td className={`hidden lg:table-cell text-right mono-nums ${b.interestPaidThisPeriod >= b.interestPerPeriod && b.interestPerPeriod > 0 ? "text-success-dark font-semibold" : "text-success-dark"}`}>
                         {formatCurrency(b.interestPaidThisPeriod)}
                       </Td>
-                      <Td className="hidden lg:table-cell text-success-dark">{formatCurrency(b.principalPaid)}</Td>
-                      <Td className={`font-semibold ${b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
+                      <Td className="hidden lg:table-cell text-right mono-nums text-success-dark">{formatCurrency(b.principalPaid)}</Td>
+                      <Td className={`text-right mono-nums font-semibold ${b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
                       <Td>
                         <span className="inline-flex items-center gap-2">
                           <StatusBadge status={l.derivedStatus} />
@@ -266,7 +266,7 @@ export function ExportLoansButton({ loans, customerNames }: { loans: LoanRow[]; 
       variant="secondary"
       onClick={() =>
         exportCSV(
-          `lendpro-loans-${new Date().toISOString().slice(0, 10)}.csv`,
+          `lendpro-loans-${businessToday()}.csv`,
           ["Loan ID", "Customer", "Principal", "Rate", "Frequency", "Start", "Due", "Interest Accrued", "Interest Paid", "Principal Paid", "Outstanding", "Status"],
           loans.map((l) => [
             l.id,

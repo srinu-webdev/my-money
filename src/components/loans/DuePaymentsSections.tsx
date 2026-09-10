@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, Clock, TrendingUp, Wallet } from "@/components/ui/icons";
+import { Calendar, CheckCircle, Clock, TrendingUp, Wallet } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { StatCard } from "@/components/ui/StatCard";
-import { StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Table, TableWrap, Th, Td } from "@/components/ui/Table";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -12,7 +13,7 @@ import { AddPaymentIconButton, usePaymentFormModal } from "@/components/payments
 import { SendReminderButton } from "@/components/loans/ReminderFormModal";
 import { MonthlyCollectionSection, type MonthlyDueItem } from "@/components/loans/MonthlyCollectionSection";
 import { formatCurrency } from "@/lib/format";
-import { formatDate } from "@/lib/dates";
+import { businessNow, formatDate } from "@/lib/dates";
 import type { LoanRow } from "@/lib/queries";
 import type { Customer } from "@/lib/types";
 
@@ -24,8 +25,14 @@ export interface DueItem {
 function Section({ title, sub, items, tone, icon: Icon, customers }: { title: string; sub: string; items: DueItem[]; tone: "danger" | "warning" | "primary"; icon: typeof Calendar; customers: Map<string, Customer> }) {
   const recordPayment = usePaymentFormModal();
   const total = items.reduce((s, x) => s + x.loan.balance.totalOutstanding, 0);
-  const toneClass = { danger: "bg-danger-light text-danger", warning: "bg-warning-light text-warning-dark", primary: "bg-primary-50 text-primary-600" }[tone];
+  // Section's tone values ("danger" | "warning" | "primary") are already a
+  // subset of Badge's own Tone type, so it doubles as the badge tone directly.
   const toneText = { danger: "text-danger", warning: "text-warning-dark", primary: "text-primary-600" }[tone];
+
+  // Nothing due in this bucket — the stat cards above already show "0
+  // loans" for it, so a whole extra card whose only content is "Nothing
+  // here" is pure clutter, not information. Skip rendering it entirely.
+  if (!items.length) return null;
 
   return (
     <Card className="mb-5">
@@ -34,75 +41,71 @@ function Section({ title, sub, items, tone, icon: Icon, customers }: { title: st
           <Icon className={`w-6 h-6 shrink-0 ${toneText}`} />
           <div>
             <h3 className="text-[15px] font-bold flex items-center gap-2">
-              {title} <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${toneClass}`}>{items.length}</span>
+              {title} <Badge tone={tone} plain className="px-2">{items.length}</Badge>
             </h3>
             <div className="text-[12.5px] text-text-secondary">{sub}</div>
           </div>
         </div>
         <div className="font-bold">{formatCurrency(total)}</div>
       </div>
-      {items.length ? (
-        <TableWrap>
-          <Table>
-            <thead>
-              <tr>
-                <Th>Customer</Th>
-                <Th className="hidden sm:table-cell">Phone</Th>
-                <Th className="hidden md:table-cell">Loan ID</Th>
-                <Th>Amount Due</Th>
-                <Th className="hidden lg:table-cell">Interest Due</Th>
-                <Th className="hidden lg:table-cell">Principal Due</Th>
-                <Th className="hidden md:table-cell">Due Date</Th>
-                <Th>Status</Th>
-                <Th />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map(({ loan: l, label }) => {
-                const c = customers.get(l.customerId);
-                return (
-                <tr key={l.id} className={tone === "danger" ? "bg-danger-light/30" : "hover:bg-surface-2"}>
-                  <Td>
-                    <div className="flex items-center gap-2">
-                      <Avatar name={c?.name ?? "?"} size="sm" />
-                      <Link href={`/customers/${l.customerId}`} className="font-semibold text-primary hover:underline">
-                        {c?.name}
-                      </Link>
-                    </div>
-                  </Td>
-                  <Td className="hidden sm:table-cell">{c?.phone}</Td>
-                  <Td className="hidden md:table-cell">
-                    <Link href={`/loans/${l.id}`} className="text-primary font-mono hover:underline">
-                      {l.id}
+      <TableWrap>
+        <Table>
+          <thead>
+            <tr>
+              <Th>Customer</Th>
+              <Th className="hidden sm:table-cell">Phone</Th>
+              <Th className="hidden md:table-cell">Loan ID</Th>
+              <Th className="text-right">Amount Due</Th>
+              <Th className="hidden lg:table-cell text-right">Interest Due</Th>
+              <Th className="hidden lg:table-cell text-right">Principal Due</Th>
+              <Th className="hidden md:table-cell">Due Date</Th>
+              <Th>Status</Th>
+              <Th />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(({ loan: l, label }) => {
+              const c = customers.get(l.customerId);
+              return (
+              <tr key={l.id} className={tone === "danger" ? "bg-danger-light/30" : "hover:bg-surface-2"}>
+                <Td>
+                  <div className="flex items-center gap-2">
+                    <Avatar name={c?.name ?? "?"} size="sm" />
+                    <Link href={`/customers/${l.customerId}`} className="font-semibold text-primary hover:underline">
+                      {c?.name}
                     </Link>
-                  </Td>
-                  <Td className="font-bold">{formatCurrency(l.balance.totalOutstanding)}</Td>
-                  <Td className="hidden lg:table-cell">{formatCurrency(l.balance.interestRemaining)}</Td>
-                  <Td className="hidden lg:table-cell">{formatCurrency(l.balance.principalRemaining)}</Td>
-                  <Td className={`hidden md:table-cell ${tone === "danger" ? "text-danger font-semibold" : tone === "warning" ? "text-warning-dark font-semibold" : "text-text-secondary"}`}>
-                    {formatDate(l.dueDate)}
-                    <div className="text-xs font-normal text-text-tertiary">{label}</div>
-                  </Td>
-                  <Td>
-                    <StatusBadge status={l.derivedStatus} />
-                  </Td>
-                  <Td>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" onClick={() => recordPayment({ loanId: l.id })}>
-                        Record Payment
-                      </Button>
-                      <SendReminderButton loanId={l.id} variant="secondary" iconOnly />
-                    </div>
-                  </Td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </Table>
-        </TableWrap>
-      ) : (
-        <div className="p-6 text-center text-text-secondary text-sm">Nothing here.</div>
-      )}
+                  </div>
+                </Td>
+                <Td className="hidden sm:table-cell">{c?.phone}</Td>
+                <Td className="hidden md:table-cell">
+                  <Link href={`/loans/${l.id}`} className="text-primary font-mono hover:underline">
+                    {l.id}
+                  </Link>
+                </Td>
+                <Td className="text-right font-bold mono-nums">{formatCurrency(l.balance.totalOutstanding)}</Td>
+                <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(l.balance.interestRemaining)}</Td>
+                <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(l.balance.principalRemaining)}</Td>
+                <Td className={`hidden md:table-cell ${tone === "danger" ? "text-danger font-semibold" : tone === "warning" ? "text-warning-dark font-semibold" : "text-text-secondary"}`}>
+                  {formatDate(l.dueDate)}
+                  <div className="text-xs font-normal text-text-tertiary">{label}</div>
+                </Td>
+                <Td>
+                  <StatusBadge status={l.derivedStatus} />
+                </Td>
+                <Td>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" onClick={() => recordPayment({ loanId: l.id })}>
+                      Record Payment
+                    </Button>
+                    <SendReminderButton loanId={l.id} variant="secondary" iconOnly />
+                  </div>
+                </Td>
+              </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      </TableWrap>
     </Card>
   );
 }
@@ -137,9 +140,14 @@ export function DuePaymentsSections({
         <StatCard label="Total Due" value={formatCurrency(sum(today) + sum(tomorrow) + sum(upcoming))} icon={Wallet} tone="info" />
       </div>
       <MonthlyCollectionSection items={monthly} customers={customers} />
-      <Section title="Due Today" sub={formatDate(new Date())} items={today} tone="danger" icon={Calendar} customers={customers} />
+      <Section title="Due Today" sub={formatDate(businessNow())} items={today} tone="danger" icon={Calendar} customers={customers} />
       <Section title="Due Tomorrow" sub="Next day" items={tomorrow} tone="warning" icon={Clock} customers={customers} />
       <Section title="Upcoming" sub="Next 30 days" items={upcoming} tone="primary" icon={TrendingUp} customers={customers} />
+      {!monthly.length && !today.length && !tomorrow.length && !upcoming.length ? (
+        <Card>
+          <EmptyState icon={CheckCircle} title="Nothing due" text="No collections due today, tomorrow, or in the next 30 days." />
+        </Card>
+      ) : null}
     </div>
   );
 }

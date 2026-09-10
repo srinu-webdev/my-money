@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionPayload } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { businessToday } from "@/lib/dates";
 
 export async function GET() {
   const session = await getSessionPayload();
@@ -20,7 +21,10 @@ export async function GET() {
   return new NextResponse(body, {
     headers: {
       "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="lendpro-backup-${new Date().toISOString().slice(0, 10)}.json"`,
+      // businessToday(), not the server's own UTC date — otherwise a backup
+      // taken in the early hours of an IST day gets filed under the
+      // previous day's date.
+      "Content-Disposition": `attachment; filename="lendpro-backup-${businessToday()}.json"`,
     },
   });
 }

@@ -1,4 +1,4 @@
-import { addDays, parseDate, startOfDay } from "./dates";
+import { addDays, businessNow, parseDate, startOfDay } from "./dates";
 import { calculateLoanBalance, getLoanStatus } from "./calculations";
 import type { Customer, Disbursement, Loan, Payment } from "./types";
 
@@ -11,7 +11,7 @@ export interface ReportRange {
 }
 
 export function reportRange(key: ReportRangeKey, customFrom?: string, customTo?: string): ReportRange {
-  const now = new Date();
+  const now = businessNow();
   const t0 = startOfDay(now);
   switch (key) {
     case "today":
@@ -42,6 +42,20 @@ export function reportRange(key: ReportRangeKey, customFrom?: string, customTo?:
 export function inRange(d: string, r: ReportRange): boolean {
   const x = parseDate(d);
   return x >= r.from && x < r.to;
+}
+
+// The equal-length window immediately before `range` — the fair basis for
+// a "vs last period" comparison regardless of which range key is active
+// (Last 30 Days compares to the 30 days before that, This Year to the same
+// span of last year's data, etc.).
+export function previousPeriodRange(range: ReportRange): ReportRange {
+  const spanMs = range.to.getTime() - range.from.getTime();
+  return { from: new Date(range.from.getTime() - spanMs), to: range.from, label: "Previous period" };
+}
+
+export function pctChange(current: number, previous: number): number | null {
+  if (previous === 0) return current === 0 ? 0 : null; // null = "no baseline", render as "New" rather than a fake percentage
+  return ((current - previous) / previous) * 100;
 }
 
 export interface ReportData {

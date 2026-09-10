@@ -11,7 +11,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Table, TableWrap, Th, Td } from "@/components/ui/Table";
 import { MoneyBarChart, StackedMoneyBarChart, MoneyLineChart, CountBarChart } from "@/components/charts/Charts";
 import { formatCurrency } from "@/lib/format";
-import { formatDate } from "@/lib/dates";
+import { businessNow, businessToday, formatDate } from "@/lib/dates";
 import { getLastNMonths, monthlyAggregate } from "@/lib/chart-utils";
 import { computeReport, reportRange, type ReportRangeKey } from "@/lib/reports";
 import { exportCSV } from "@/lib/csv";
@@ -85,7 +85,7 @@ export function ReportsView({
       ["Month", "Money Lent", "Interest Collected", "Principal Collected"],
     ];
     months12.forEach((m, i) => rows.push([m.label, lending[i], interestSeries[i], principalSeries[i]]));
-    exportCSV(`lendpro-report-${new Date().toISOString().slice(0, 10)}.csv`, rows[0] as string[], rows.slice(1) as (string | number)[][]);
+    exportCSV(`lendpro-report-${businessToday()}.csv`, rows[0] as string[], rows.slice(1) as (string | number)[][]);
   }
 
   return (
@@ -110,7 +110,7 @@ export function ReportsView({
       <div className="hidden print:block mb-4">
         <h2 className="text-xl font-bold">LendPro — Business Report</h2>
         <div className="text-text-secondary text-sm">
-          Period: {rep.range.label} · Generated {formatDate(new Date())}
+          Period: {rep.range.label} · Generated {formatDate(businessNow())}
         </div>
       </div>
 
@@ -127,7 +127,7 @@ export function ReportsView({
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-5">
         <StatCard label="Total Money Lent" value={formatCurrency(rep.lent)} icon={Wallet} tone="primary" hint={`${rep.lentCount} loan${rep.lentCount === 1 ? "" : "s"} disbursed in period`} />
         <StatCard label="Principal Collected" value={formatCurrency(rep.principalCollected)} icon={TrendingUp} tone="success" hint="In period" />
         <StatCard label="Interest Collected" value={formatCurrency(rep.interestCollected)} icon={Percent} tone="success" hint="In period" />
@@ -173,8 +173,8 @@ export function ReportsView({
               <thead>
                 <tr>
                   <Th>Method</Th>
-                  <Th>Amount</Th>
-                  <Th>Share</Th>
+                  <Th className="text-right">Amount</Th>
+                  <Th className="text-right">Share</Th>
                 </tr>
               </thead>
               <tbody>
@@ -182,8 +182,8 @@ export function ReportsView({
                   byMethod.map(([m, v]) => (
                     <tr key={m}>
                       <Td>{m}</Td>
-                      <Td className="font-semibold">{formatCurrency(v)}</Td>
-                      <Td>{rep.totalCollected ? Math.round((v / rep.totalCollected) * 100) : 0}%</Td>
+                      <Td className="text-right mono-nums font-semibold">{formatCurrency(v)}</Td>
+                      <Td className="text-right mono-nums">{rep.totalCollected ? Math.round((v / rep.totalCollected) * 100) : 0}%</Td>
                     </tr>
                   ))
                 ) : (
@@ -205,7 +205,7 @@ export function ReportsView({
                 <tr>
                   <Th>Loan</Th>
                   <Th>Customer</Th>
-                  <Th>Principal</Th>
+                  <Th className="text-right">Principal</Th>
                   <Th>Start</Th>
                 </tr>
               </thead>
@@ -222,7 +222,7 @@ export function ReportsView({
                           </Link>
                         </Td>
                         <Td>{nameOf.get(l.customerId)}</Td>
-                        <Td className="font-semibold">{formatCurrency(l.principal)}</Td>
+                        <Td className="text-right mono-nums font-semibold">{formatCurrency(l.principal)}</Td>
                         <Td className="text-text-secondary">{formatDate(l.startDate)}</Td>
                       </tr>
                     ))

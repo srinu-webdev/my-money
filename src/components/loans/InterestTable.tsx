@@ -22,7 +22,12 @@ import { usePaymentFormModal } from "@/components/payments/PaymentFormModal";
 type InterestStatus = "Pending" | "Partial" | "Paid" | "Overdue";
 
 function interestStatus(l: LoanRow): InterestStatus {
-  if (l.balance.interestRemaining <= 1) return l.balance.interestAccrued > 0 ? "Paid" : "Pending";
+  // A loan with nothing left owing is "Paid" — including a genuinely
+  // interest-free loan (a FIXED rate of ₹0), which never accrues anything
+  // to begin with. That used to fall through to `interestAccrued > 0`
+  // being false and get stuck showing "Pending" forever, with no payment
+  // ever possible to clear it.
+  if (l.balance.interestRemaining <= 1) return l.balance.interestAccrued > 0 || l.balance.interestPerPeriod <= 0 ? "Paid" : "Pending";
   if (l.derivedStatus === "OVERDUE") return "Overdue";
   return l.balance.interestPaid > 0 ? "Partial" : "Pending";
 }
@@ -34,6 +39,11 @@ export function InterestTable({ loans, customerNames }: { loans: LoanRow[]; cust
   const recordPayment = usePaymentFormModal();
 
   const active = loans.filter((l) => l.derivedStatus !== "CANCELLED");
+  const counts = useMemo(() => {
+    const c: Record<InterestStatus | "all", number> = { all: active.length, Pending: 0, Partial: 0, Paid: 0, Overdue: 0 };
+    active.forEach((l) => c[interestStatus(l)]++);
+    return c;
+  }, [active]);
   const totals = active.reduce(
     (a, l) => {
       a.accrued += l.balance.interestAccrued;
@@ -77,7 +87,17 @@ export function InterestTable({ loans, customerNames }: { loans: LoanRow[]; cust
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
             <Input className="pl-8" placeholder="Search loan or customer…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <PillTabs tabs={[{ key: "all", label: "All" }, { key: "Pending", label: "Pending" }, { key: "Partial", label: "Partial" }, { key: "Paid", label: "Paid" }, { key: "Overdue", label: "Overdue" }]} active={filter} onChange={(k) => setFilter(k as typeof filter)} />
+          <PillTabs
+            tabs={[
+              { key: "all", label: `All ${counts.all}` },
+              { key: "Pending", label: `Pending ${counts.Pending}`, muted: counts.Pending === 0 },
+              { key: "Partial", label: `Partial ${counts.Partial}`, muted: counts.Partial === 0 },
+              { key: "Paid", label: `Paid ${counts.Paid}`, muted: counts.Paid === 0 },
+              { key: "Overdue", label: `Overdue ${counts.Overdue}`, muted: counts.Overdue === 0 },
+            ]}
+            active={filter}
+            onChange={(k) => setFilter(k as typeof filter)}
+          />
         </div>
         {total ? (
           <>
@@ -87,13 +107,13 @@ export function InterestTable({ loans, customerNames }: { loans: LoanRow[]; cust
                   <tr>
                     <Th>Customer</Th>
                     <Th>Loan</Th>
-                    <Th>Principal</Th>
-                    <Th>Rate</Th>
+                    <Th className="text-right">Principal</Th>
+                    <Th className="text-right">Rate</Th>
                     <Th>Frequency</Th>
-                    <Th>Per Period</Th>
-                    <Th>Interest Accrued</Th>
-                    <Th>Interest Paid</Th>
-                    <Th>Interest Pending</Th>
+                    <Th className="text-right">Per Period</Th>
+                    <Th className="text-right">Interest Accrued</Th>
+                    <Th className="text-right">Interest Paid</Th>
+                    <Th className="text-right">Interest Pending</Th>
                     <Th>Due Date</Th>
                     <Th>Status</Th>
                     <Th />
@@ -115,22 +135,25 @@ export function InterestTable({ loans, customerNames }: { loans: LoanRow[]; cust
                           {l.id}
                         </Link>
                       </Td>
-                      <Td>
+                      <Td className="text-right mono-nums">
                         {formatCurrency(l.balance.principalRemaining)}
                         <div className="text-xs text-text-tertiary">of {formatCurrency(l.principal)}</div>
                       </Td>
-                      <Td>{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
+                      <Td className="text-right mono-nums">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
                       <Td>{FREQ_LABEL[l.interestFrequency]}</Td>
-                      <Td>{formatCurrency(l.balance.interestPerPeriod)}</Td>
-                      <Td>{formatCurrency(l.balance.interestAccrued)}</Td>
-                      <Td className="text-success-dark">{formatCurrency(l.balance.interestPaid)}</Td>
-                      <Td className={l.balance.interestRemaining > 0 ? "text-warning-dark font-semibold" : ""}>{formatCurrency(l.balance.interestRemaining)}</Td>
+                      <Td className="text-right mono-nums">{formatCurrency(l.balance.interestPerPeriod)}</Td>
+                      <Td className="text-right mono-nums">{formatCurrency(l.balance.interestAccrued)}</Td>
+                      <Td className="text-right mono-nums text-success-dark">{formatCurrency(l.balance.interestPaid)}</Td>
+                      <Td className={`text-right mono-nums ${l.balance.interestRemaining > 0 ? "text-warning-dark font-semibold" : ""}`}>{formatCurrency(l.balance.interestRemaining)}</Td>
                       <Td className="text-text-secondary">{formatDate(l.dueDate)}</Td>
                       <Td>
                         <Badge tone={TONE[status]}>{status}</Badge>
                       </Td>
                       <Td>
-                        {l.balance.interestRemaining > 0 && l.derivedStatus !== "CANCELLED" ? (
+                        {/* Same >1 threshold `interestStatus` uses for "Paid" above —
+                            otherwise a loan badged Paid could still show an active
+                            Collect button for a few paise of rounding dust. */}
+                        {status !== "Paid" && l.balance.interestRemaining > 1 && l.derivedStatus !== "CANCELLED" ? (
                           <Button size="sm" variant="soft" onClick={() => recordPayment({ loanId: l.id, allocation: "interest" })}>
                             Collect
                           </Button>

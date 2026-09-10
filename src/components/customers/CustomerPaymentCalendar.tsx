@@ -5,7 +5,7 @@ import Link from "next/link";
 import { startOfMonth, endOfMonth, eachDayOfInterval, getDay, subDays, addDays as fnsAddDays, isSameMonth } from "date-fns";
 import { ChevronLeft, ChevronRight, CalendarDays } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
-import { toISODate, addMonths, formatDate } from "@/lib/dates";
+import { toISODate, addMonths, formatDate, businessNow } from "@/lib/dates";
 import type { LoanRow } from "@/lib/queries";
 import type { Payment } from "@/lib/types";
 
@@ -38,8 +38,12 @@ function loanExpectedThrough(loan: LoanRow, todayIso: string): string {
 
 export function CustomerPaymentCalendar({ loans, payments }: { loans: LoanRow[]; payments: Payment[] }) {
   const [monthOffset, setMonthOffset] = useState(0);
-  const todayIso = toISODate(new Date());
-  const base = useMemo(() => addMonths(new Date(), monthOffset), [monthOffset]);
+  // businessNow(), not new Date() — this drives which days get flagged
+  // "Missed" for a daily loan, so it needs to agree with the same business
+  // calendar day the server used to compute every other status on the
+  // page, not whatever timezone this browser happens to be in.
+  const todayIso = toISODate(businessNow());
+  const base = useMemo(() => addMonths(businessNow(), monthOffset), [monthOffset]);
 
   const dailyLoans = useMemo(() => loans.filter((l) => l.repaymentType === "Daily Installment" && l.status !== "CANCELLED"), [loans]);
 

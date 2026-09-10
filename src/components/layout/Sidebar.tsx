@@ -23,6 +23,12 @@ import { cn } from "@/lib/cn";
 import { BrandMark } from "@/components/ui/BrandLogo";
 import { logoutAction } from "@/lib/actions/auth";
 
+// Deliberately dark, always — a persistent navy sidebar next to a light
+// content area is the standard premium-fintech layout (Stripe, Linear,
+// Mercury) and reads as more "product," not tied to the app's own
+// light/dark theme toggle (which only affects the main content surfaces).
+// Colors are inlined as Tailwind arbitrary values below (slate-900/800/500/400).
+
 interface NavItem {
   href: string;
   label: string;
@@ -76,7 +82,7 @@ export function Sidebar({
       onClick={onCloseMobile}
       className={cn(
         "flex items-center gap-3 px-3 py-2.5 rounded-[10px] font-medium text-[13.5px] mb-0.5 transition-colors relative whitespace-nowrap",
-        isActive(n.href) ? "bg-primary-50 text-primary-600 font-semibold dark:text-indigo-300" : "text-text-secondary hover:bg-surface-3 hover:text-text",
+        isActive(n.href) ? "bg-primary-600 text-white font-semibold shadow-[0_1px_2px_rgba(0,0,0,.3)]" : "text-[#94a3b8] hover:bg-[#1e293b] hover:text-[#f1f5f9]",
         collapsed && "justify-center px-0"
       )}
     >
@@ -92,7 +98,7 @@ export function Sidebar({
 
   const section = (title: string, items: NavItem[]) => (
     <>
-      <div className={cn("text-[10.5px] font-bold uppercase tracking-wider text-text-tertiary px-2.5 pt-3.5 pb-1.5", collapsed && "hidden")}>{title}</div>
+      <div className={cn("text-[10.5px] font-bold uppercase tracking-wider text-[#64748b] px-2.5 pt-3.5 pb-1.5", collapsed && "hidden")}>{title}</div>
       {items.map(item)}
     </>
   );
@@ -102,21 +108,21 @@ export function Sidebar({
       {mobileOpen ? <div className="fixed inset-0 bg-black/50 z-[99] md:hidden" onClick={onCloseMobile} /> : null}
       <aside
         className={cn(
-          "fixed top-0 left-0 bottom-0 bg-surface border-r border-border flex flex-col z-[100] transition-[width,transform] duration-200",
+          "fixed top-0 left-0 bottom-0 bg-[#0f172a] border-r border-[#1e293b] flex flex-col z-[100] transition-[width,transform] duration-200",
           collapsed ? "w-[78px]" : "w-[264px]",
           "md:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className={cn("flex items-center gap-3 px-5 h-[68px] border-b border-border shrink-0", collapsed && "justify-center px-0")}>
+        <div className={cn("flex items-center gap-3 px-5 h-[68px] border-b border-[#1e293b] shrink-0", collapsed && "justify-center px-0")}>
           <BrandMark className="w-9 h-9" />
           {!collapsed && (
-            <span className="font-extrabold text-lg tracking-tight leading-tight">
+            <span className="font-extrabold text-lg tracking-tight leading-tight text-white">
               LendPro
-              <small className="block text-[10.5px] font-medium text-text-tertiary -mt-0.5">Money Lending System</small>
+              <small className="block text-[10.5px] font-medium text-[#64748b] -mt-0.5">Money Lending System</small>
             </span>
           )}
-          <button className="ml-auto md:hidden text-text-secondary" onClick={onCloseMobile} aria-label="Close menu">
+          <button className="ml-auto md:hidden text-[#94a3b8] hover:text-white" onClick={onCloseMobile} aria-label="Close menu">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -129,7 +135,12 @@ export function Sidebar({
           <ChevronLeft className={cn("w-[13px] h-[13px] transition-transform", collapsed && "rotate-180")} />
         </button>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3.5">
+        {/* min-h-0 is load-bearing: a flex item with overflow-y-auto won't
+            shrink below its own content height without it, so on shorter
+            screens this nav would push past the fixed-height aside and
+            crowd/clip the footer card and disclaimer below instead of
+            scrolling internally. */}
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-3.5">
           {section("Overview", overview)}
           {section("Management", management)}
           {section("Analytics", analytics)}
@@ -138,7 +149,7 @@ export function Sidebar({
           <button
             onClick={() => logoutAction()}
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-[10px] font-medium text-[13.5px] w-full text-left text-text-secondary hover:bg-surface-3 hover:text-text transition-colors",
+              "flex items-center gap-3 px-3 py-2.5 rounded-[10px] font-medium text-[13.5px] w-full text-left text-[#94a3b8] hover:bg-[#1e293b] hover:text-[#f1f5f9] transition-colors",
               collapsed && "justify-center px-0"
             )}
           >
@@ -148,8 +159,19 @@ export function Sidebar({
         </nav>
 
         {!collapsed && (
-          <div className="px-4 py-3.5 border-t border-border text-[11px] text-text-tertiary leading-relaxed shrink-0">
-            Record-keeping tool only. Interest calculations and lending practices should comply with applicable local laws.
+          <div className="p-3.5 border-t border-[#1e293b] shrink-0">
+            <div className="rounded-[14px] p-4 bg-primary-700 text-white">
+              <TrendingUp className="w-6 h-6 mb-2.5 opacity-90" />
+              <div className="text-[13.5px] font-bold leading-tight">Grow Your Portfolio</div>
+              <div className="text-[11.5px] text-white/75 mt-1 leading-relaxed">Efficient lending. Better returns.</div>
+              <Link
+                href="/reports"
+                className="mt-3 inline-flex items-center justify-center w-full px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-[12.5px] font-semibold transition-colors"
+              >
+                View Reports
+              </Link>
+            </div>
+            <div className="text-[10.5px] text-[#64748b] leading-relaxed mt-3">Record-keeping tool only. Interest calculations and lending practices should comply with applicable local laws.</div>
           </div>
         )}
       </aside>

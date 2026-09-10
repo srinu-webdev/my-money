@@ -5,6 +5,7 @@ import { GlobalSearch } from "./GlobalSearch";
 import { NotificationBell } from "./NotificationBell";
 import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
+import { businessNow } from "@/lib/dates";
 import type { Notification } from "@/lib/types";
 
 export function Topbar({
@@ -20,7 +21,7 @@ export function Topbar({
   unreadCount: number;
   onOpenMobile: () => void;
 }) {
-  const today = new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  const today = businessNow().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
   return (
     <header className="h-[68px] bg-surface border-b border-border flex items-center gap-3.5 px-4 sm:px-6 sticky top-0 z-[90]">
       <button onClick={onOpenMobile} className="md:hidden w-9 h-9 rounded-[10px] flex items-center justify-center text-text-secondary hover:bg-surface-3" aria-label="Menu">

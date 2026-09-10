@@ -188,6 +188,7 @@ export interface DashboardStats {
   totalCollected: number;
   todaysCollection: number;
   upcomingDue: number;
+  upcomingDueLoans: number;
   overdueAmount: number;
   activeLoans: number;
   overdueLoans: number;

@@ -8,6 +8,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // Next's own dev-mode build-activity badge floats fixed at the bottom-left
+  // of every page — exactly where the Sidebar's own footer card and
+  // disclaimer text live, so in local `next dev` it visibly sits on top of
+  // that disclaimer and looks like a real overlap/collision bug. It never
+  // renders in a production build (next build/start, i.e. the live Vercel
+  // site), but disabling it locally too avoids the false alarm.
+  devIndicators: false,
 };
 
 export default nextConfig;

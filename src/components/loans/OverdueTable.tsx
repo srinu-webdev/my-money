@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { StatCard } from "@/components/ui/StatCard";
 import { usePagination } from "@/lib/hooks/useTableState";
 import { formatCurrency } from "@/lib/format";
-import { formatDate } from "@/lib/dates";
+import { businessToday, formatDate } from "@/lib/dates";
 import type { LoanRow } from "@/lib/queries";
 import type { Customer } from "@/lib/types";
 import { usePaymentFormModal } from "@/components/payments/PaymentFormModal";
@@ -80,7 +80,7 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
             variant="secondary"
             onClick={() =>
               exportCSV(
-                `lendpro-overdue-${new Date().toISOString().slice(0, 10)}.csv`,
+                `lendpro-overdue-${businessToday()}.csv`,
                 ["Customer", "Phone", "Loan ID", "Principal", "Outstanding", "Due Date", "Days Overdue"],
                 overdue.map((l) => [customers.get(l.customerId)?.name ?? "", customers.get(l.customerId)?.phone ?? "", l.id, l.principal, l.balance.totalOutstanding, formatDate(l.dueDate), l.balance.daysOverdue])
               )
@@ -108,10 +108,10 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
           <PillTabs
             tabs={[
               { key: "all", label: `All ${counts.all}` },
-              { key: "1-7", label: `1–7 days ${counts["1-7"]}` },
-              { key: "8-30", label: `8–30 days ${counts["8-30"]}` },
-              { key: "31-90", label: `31–90 days ${counts["31-90"]}` },
-              { key: "90+", label: `90+ days ${counts["90+"]}` },
+              { key: "1-7", label: `1–7 days ${counts["1-7"]}`, muted: counts["1-7"] === 0 },
+              { key: "8-30", label: `8–30 days ${counts["8-30"]}`, muted: counts["8-30"] === 0 },
+              { key: "31-90", label: `31–90 days ${counts["31-90"]}`, muted: counts["31-90"] === 0 },
+              { key: "90+", label: `90+ days ${counts["90+"]}`, muted: counts["90+"] === 0 },
             ]}
             active={bucket}
             onChange={(k) => setBucket(k as Bucket)}
@@ -126,13 +126,13 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
                     <Th>Customer</Th>
                     <Th className="hidden sm:table-cell">Phone</Th>
                     <Th className="hidden md:table-cell">Loan ID</Th>
-                    <Th className="hidden lg:table-cell">Original Principal</Th>
-                    <Th className="hidden lg:table-cell">Outstanding Principal</Th>
-                    <Th className="hidden lg:table-cell">Interest Pending</Th>
-                    <Th>Total Outstanding</Th>
+                    <Th className="hidden lg:table-cell text-right">Original Principal</Th>
+                    <Th className="hidden lg:table-cell text-right">Outstanding Principal</Th>
+                    <Th className="hidden lg:table-cell text-right">Interest Pending</Th>
+                    <Th className="text-right">Total Outstanding</Th>
                     <Th className="hidden md:table-cell">Due Date</Th>
-                    <Th>Days Overdue</Th>
-                    <Th className="hidden lg:table-cell">Last Payment</Th>
+                    <Th className="text-right">Days Overdue</Th>
+                    <Th className="hidden lg:table-cell text-right">Last Payment</Th>
                     <Th />
                   </tr>
                 </thead>
@@ -155,21 +155,21 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
                             {l.id}
                           </Link>
                         </Td>
-                        <Td className="hidden lg:table-cell">{formatCurrency(l.principal)}</Td>
-                        <Td className="hidden lg:table-cell">{formatCurrency(l.balance.principalRemaining)}</Td>
-                        <Td className="hidden lg:table-cell text-warning-dark">{formatCurrency(l.balance.interestRemaining)}</Td>
-                        <Td className="font-bold text-danger">{formatCurrency(l.balance.totalOutstanding)}</Td>
+                        <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(l.principal)}</Td>
+                        <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(l.balance.principalRemaining)}</Td>
+                        <Td className="hidden lg:table-cell text-right mono-nums text-warning-dark">{formatCurrency(l.balance.interestRemaining)}</Td>
+                        <Td className="text-right mono-nums font-bold text-danger">{formatCurrency(l.balance.totalOutstanding)}</Td>
                         <Td className="hidden md:table-cell text-danger">{formatDate(l.dueDate)}</Td>
-                        <Td>
+                        <Td className="text-right">
                           <Badge tone={sev(l.balance.daysOverdue)}>
                             {l.balance.daysOverdue} day{l.balance.daysOverdue === 1 ? "" : "s"}
                           </Badge>
                         </Td>
-                        <Td className="hidden lg:table-cell text-text-secondary">
+                        <Td className="hidden lg:table-cell text-right text-text-secondary">
                           {l.balance.lastPaymentDate ? (
                             <>
                               {formatDate(l.balance.lastPaymentDate)}
-                              <div className="text-xs text-text-tertiary">{formatCurrency(l.balance.lastPaymentAmount)}</div>
+                              <div className="text-xs text-text-tertiary mono-nums">{formatCurrency(l.balance.lastPaymentAmount)}</div>
                             </>
                           ) : (
                             <span className="text-text-tertiary">Never</span>

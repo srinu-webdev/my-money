@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CalendarClock } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
-import { StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Table, TableWrap, Th, Td } from "@/components/ui/Table";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -43,7 +43,7 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
         <CalendarClock className="w-6 h-6 shrink-0 text-primary-600" />
         <div>
           <h3 className="text-[15px] font-bold flex items-center gap-2">
-            Monthly Interest Collection <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary-50 text-primary-600">{rows.length}</span>
+            Monthly Interest Collection <Badge tone="primary" plain className="px-2">{rows.length}</Badge>
           </h3>
           <div className="text-[12.5px] text-text-secondary">Who to collect this recurring monthly interest from, and when — separate from a loan&rsquo;s final due date.</div>
         </div>
@@ -56,7 +56,7 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
               <Th className="hidden sm:table-cell">Phone</Th>
               <Th className="hidden md:table-cell">Loan ID</Th>
               <Th className="hidden sm:table-cell">Next Due</Th>
-              <Th>Amount</Th>
+              <Th className="text-right">Amount</Th>
               <Th>Status</Th>
               <Th />
             </tr>
@@ -83,7 +83,7 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
                     </Link>
                   </Td>
                   <Td className="hidden sm:table-cell text-text-secondary">{formatDate(nextDueDate)}</Td>
-                  <Td className="font-bold">{formatCurrency(pendingWhole > 0.01 ? pendingWhole : l.balance.interestPerPeriod)}</Td>
+                  <Td className="text-right font-bold mono-nums">{formatCurrency(pendingWhole > 0.01 ? pendingWhole : l.balance.interestPerPeriod)}</Td>
                   <Td className={pendingWhole > 0.01 ? "text-danger font-semibold" : daysUntil === 0 ? "text-warning-dark font-semibold" : "text-text-secondary"}>
                     {pendingWhole > 0.01 ? (
                       <>

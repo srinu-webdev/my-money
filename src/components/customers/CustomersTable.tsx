@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useConfirm, useAlert } from "@/components/ui/ConfirmDialog";
 import { usePagination, useSort } from "@/lib/hooks/useTableState";
 import { formatCurrency } from "@/lib/format";
-import { formatDate } from "@/lib/dates";
+import { businessToday, formatDate } from "@/lib/dates";
 import type { CustomerRow } from "@/lib/queries";
 import { bulkDeleteCustomersAction, bulkSetCustomerStatusAction, deleteCustomerAction, setCustomerStatusAction } from "@/lib/actions/customers";
 import { useAddCustomerModal, useEditCustomerModal } from "./CustomerFormModal";
@@ -219,10 +219,10 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                   <SortTh label="Customer" active={field === "name"} dir={dir} onClick={() => toggle("name", true)} />
                   <Th className="hidden sm:table-cell">Phone</Th>
                   <Th className="hidden lg:table-cell">Email</Th>
-                  <SortTh label="Total Borrowed" active={field === "borrowed"} dir={dir} onClick={() => toggle("borrowed")} className="hidden md:table-cell" />
-                  <SortTh label="Total Paid" active={field === "paid"} dir={dir} onClick={() => toggle("paid")} className="hidden md:table-cell" />
-                  <Th className="hidden lg:table-cell">Interest Paid</Th>
-                  <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} />
+                  <SortTh label="Total Borrowed" active={field === "borrowed"} dir={dir} onClick={() => toggle("borrowed")} className="hidden md:table-cell text-right" />
+                  <SortTh label="Total Paid" active={field === "paid"} dir={dir} onClick={() => toggle("paid")} className="hidden md:table-cell text-right" />
+                  <Th className="hidden lg:table-cell text-right">Interest Paid</Th>
+                  <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} className="text-right" />
                   <Th className="hidden sm:table-cell">Active Loans</Th>
                   <Th>Status</Th>
                   <SortTh label="Loan Taken" active={field === "firstLoanDate"} dir={dir} onClick={() => toggle("firstLoanDate")} className="hidden md:table-cell" />
@@ -250,10 +250,10 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                     </Td>
                     <Td className="hidden sm:table-cell">{c.phone}</Td>
                     <Td className="hidden lg:table-cell text-text-secondary">{c.email || "—"}</Td>
-                    <Td className="hidden md:table-cell mono-nums font-semibold">{formatCurrency(c.summary.totalBorrowed)}</Td>
-                    <Td className="hidden md:table-cell mono-nums font-semibold text-success-dark">{formatCurrency(c.summary.totalPayments)}</Td>
-                    <Td className="hidden lg:table-cell mono-nums font-semibold">{formatCurrency(c.summary.interestPaid)}</Td>
-                    <Td className={`mono-nums font-semibold ${c.summary.totalOutstanding > 0 ? "text-warning-dark" : ""}`}>{formatCurrency(c.summary.totalOutstanding)}</Td>
+                    <Td className="hidden md:table-cell text-right mono-nums font-semibold">{formatCurrency(c.summary.totalBorrowed)}</Td>
+                    <Td className="hidden md:table-cell text-right mono-nums font-semibold text-success-dark">{formatCurrency(c.summary.totalPayments)}</Td>
+                    <Td className="hidden lg:table-cell text-right mono-nums font-semibold">{formatCurrency(c.summary.interestPaid)}</Td>
+                    <Td className={`text-right mono-nums font-semibold ${c.summary.totalOutstanding > 0 ? "text-warning-dark" : ""}`}>{formatCurrency(c.summary.totalOutstanding)}</Td>
                     <Td className="hidden sm:table-cell">
                       {c.summary.activeLoans}
                       {c.summary.overdueLoans ? (
@@ -329,7 +329,7 @@ export function ExportCustomersButton({ customers }: { customers: CustomerRow[] 
       variant="secondary"
       onClick={() =>
         exportCSV(
-          `lendpro-customers-${new Date().toISOString().slice(0, 10)}.csv`,
+          `lendpro-customers-${businessToday()}.csv`,
           ["Customer ID", "Name", "Phone", "Email", "Status", "Total Borrowed", "Total Paid", "Outstanding", "Active Loans", "Loan Taken", "Completed", "Registered"],
           customers.map((c) => [
             c.id,

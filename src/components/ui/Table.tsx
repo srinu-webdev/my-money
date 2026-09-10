@@ -2,8 +2,8 @@ import { cn } from "@/lib/cn";
 import { CaretDown, CaretUp, CaretUpDown } from "@/components/ui/icons";
 import type { ReactNode, TableHTMLAttributes, ThHTMLAttributes } from "react";
 
-export function TableWrap({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto">{children}</div>;
+export function TableWrap({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("overflow-x-auto", className)}>{children}</div>;
 }
 
 export function Table({ className, ...props }: TableHTMLAttributes<HTMLTableElement>) {

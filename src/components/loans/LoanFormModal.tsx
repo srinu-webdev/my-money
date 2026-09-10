@@ -13,7 +13,7 @@ import { getLoanFormDefaultsAction } from "@/lib/actions/options";
 import type { Customer, InterestFrequency, InterestType, Loan } from "@/lib/types";
 import { FREQ_LABEL, FREQ_NOUN, FREQUENCY_DAYS } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
-import { addMonths, daysBetween, formatDate, todayStr, toISODate } from "@/lib/dates";
+import { addMonths, businessNow, daysBetween, formatDate, todayStr, toISODate } from "@/lib/dates";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 
 const REPAYMENT_TYPES = ["Interest Only", "Principal + Interest", "Principal First", "Daily Installment", "Custom"] as const;
@@ -62,7 +62,10 @@ function LoanFormContent({
   const [interestRate, setInterestRate] = useState(String(loan?.interestRate ?? draft?.interestRate ?? defaults.defaultInterestRate));
   const [interestFrequency, setInterestFrequency] = useState<InterestFrequency>(loan?.interestFrequency ?? draft?.interestFrequency ?? defaults.defaultFrequency);
   const [startDate, setStartDate] = useState(loan?.startDate ?? draft?.startDate ?? todayStr());
-  const [dueDate, setDueDate] = useState(loan?.dueDate ?? draft?.dueDate ?? toISODate(addMonths(new Date(), 6)));
+  // businessNow(), matching startDate's todayStr() above — not new Date(),
+  // which would let this default due date silently land a calendar day off
+  // whenever the server's UTC clock and the business's IST day disagree.
+  const [dueDate, setDueDate] = useState(loan?.dueDate ?? draft?.dueDate ?? toISODate(addMonths(businessNow(), 6)));
   const [repaymentType, setRepaymentType] = useState(loan?.repaymentType ?? draft?.repaymentType ?? defaults.defaultRepaymentType);
   const [totalTarget, setTotalTarget] = useState("");
   // Most loans hand over the full agreed amount on day one — this stays

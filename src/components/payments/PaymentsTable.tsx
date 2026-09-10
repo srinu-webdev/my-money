@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { usePagination, useSort } from "@/lib/hooks/useTableState";
 import { formatCurrency } from "@/lib/format";
-import { formatDate } from "@/lib/dates";
+import { businessToday, formatDate } from "@/lib/dates";
 import type { Payment, PaymentMethod } from "@/lib/types";
 import { deletePaymentAction, bulkDeletePaymentsAction } from "@/lib/actions/payments";
 import { usePaymentFormModal } from "./PaymentFormModal";
@@ -167,12 +167,12 @@ export function PaymentsTable({
                   {!hideCustomer && <Th>Customer</Th>}
                   {!hideLoan && <Th className="hidden md:table-cell">Loan</Th>}
                   {showToolbar ? (
-                    <SortTh label="Total Amount" active={field === "amount"} dir={dir} onClick={() => toggle("amount")} />
+                    <SortTh label="Total Amount" active={field === "amount"} dir={dir} onClick={() => toggle("amount")} className="text-right" />
                   ) : (
-                    <Th>Total Amount</Th>
+                    <Th className="text-right">Total Amount</Th>
                   )}
-                  <Th className="hidden lg:table-cell">Interest</Th>
-                  <Th className="hidden lg:table-cell">Principal</Th>
+                  <Th className="hidden lg:table-cell text-right">Interest</Th>
+                  <Th className="hidden lg:table-cell text-right">Principal</Th>
                   <Th className="hidden md:table-cell">Method</Th>
                   {showToolbar ? (
                     <SortTh label="Date" active={field === "paymentDate"} dir={dir} onClick={() => toggle("paymentDate")} className="hidden sm:table-cell" />
@@ -224,9 +224,9 @@ export function PaymentsTable({
                         </Link>
                       </Td>
                     )}
-                    <Td className="font-semibold">{formatCurrency(p.amount)}</Td>
-                    <Td className="hidden lg:table-cell text-success-dark">{formatCurrency(p.interestAmount)}</Td>
-                    <Td className="hidden lg:table-cell">{formatCurrency(p.principalAmount)}</Td>
+                    <Td className="text-right mono-nums font-semibold">{formatCurrency(p.amount)}</Td>
+                    <Td className="hidden lg:table-cell text-right mono-nums text-success-dark">{formatCurrency(p.interestAmount)}</Td>
+                    <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(p.principalAmount)}</Td>
                     <Td className="hidden md:table-cell">
                       <Badge tone="gray" plain>
                         {p.paymentMethod}
@@ -264,7 +264,7 @@ export function ExportPaymentsButton({ payments, customerNames }: { payments: Pa
       variant="secondary"
       onClick={() =>
         exportCSV(
-          `lendpro-payments-${new Date().toISOString().slice(0, 10)}.csv`,
+          `lendpro-payments-${businessToday()}.csv`,
           ["Payment ID", "Customer", "Loan ID", "Amount", "Interest", "Principal", "Method", "Date", "Reference", "Recorded By"],
           payments.map((p) => [p.id, customerNames.get(p.customerId) ?? "", p.loanId, p.amount, p.interestAmount, p.principalAmount, p.paymentMethod, formatDate(p.paymentDate), p.reference ?? "", p.recordedBy])
         )

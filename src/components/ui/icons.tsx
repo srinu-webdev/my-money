@@ -58,6 +58,7 @@ import { SignOutIcon as PSignOut } from "@phosphor-icons/react/dist/ssr/SignOut"
 import { SquaresFourIcon as PSquaresFour } from "@phosphor-icons/react/dist/ssr/SquaresFour";
 import { SunIcon as PSun } from "@phosphor-icons/react/dist/ssr/Sun";
 import { TrashIcon as PTrash } from "@phosphor-icons/react/dist/ssr/Trash";
+import { TrendDownIcon as PTrendDown } from "@phosphor-icons/react/dist/ssr/TrendDown";
 import { TrendUpIcon as PTrendUp } from "@phosphor-icons/react/dist/ssr/TrendUp";
 import { UserIcon as PUser } from "@phosphor-icons/react/dist/ssr/User";
 import { UserCircleIcon as PUserCircle } from "@phosphor-icons/react/dist/ssr/UserCircle";
@@ -93,6 +94,7 @@ export const HandCoins = duotone(PHandCoins);
 export const Receipt = duotone(PReceipt);
 export const Percent = duotone(PPercent);
 export const TrendingUp = duotone(PTrendUp);
+export const TrendingDown = duotone(PTrendDown);
 export const FileBarChart = duotone(PChartBar);
 export const Activity = duotone(PPulse);
 
