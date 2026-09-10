@@ -3,7 +3,7 @@ import { LoansTable, ExportLoansButton } from "@/components/loans/LoansTable";
 import { AddLoanButton } from "@/components/loans/LoanFormModal";
 import { StatCard } from "@/components/ui/StatCard";
 import { formatCurrency } from "@/lib/format";
-import { CreditCard, Wallet, Percent, AlertTriangle } from "lucide-react";
+import { CreditCard, Wallet, Percent, AlertTriangle } from "@/components/ui/icons";
 
 export const metadata = { title: "Loans — LendPro" };
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export default async function LoansPage() {
           <AddLoanButton />
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard label="Total Loans" value={loans.length} icon={CreditCard} tone="primary" />
         <StatCard label="Principal Lent" value={formatCurrency(totals.principal)} icon={Wallet} tone="purple" />
         <StatCard label="Interest Pending" value={formatCurrency(totals.interestPending)} icon={Percent} tone="warning" />

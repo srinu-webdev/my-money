@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { startOfMonth, endOfMonth, eachDayOfInterval, getDay, subDays, addDays as fnsAddDays, isSameMonth } from "date-fns";
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
 import { toISODate, addMonths, formatDate } from "@/lib/dates";
 import type { LoanRow } from "@/lib/queries";

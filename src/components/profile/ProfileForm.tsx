@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { AlertTriangle, Camera, Check, Lock, LogOut } from "lucide-react";
+import { AlertTriangle, Camera, Check, Lock, LogOut } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormGroup, Input } from "@/components/ui/Field";

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/Badge";
 import { Table, TableWrap, Th, Td } from "@/components/ui/Table";
@@ -40,9 +40,7 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
   return (
     <Card className="mb-5">
       <div className="flex items-center gap-3 px-4 sm:px-[22px] py-[18px] border-b border-border flex-wrap">
-        <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary-50 text-primary-600">
-          <CalendarClock className="w-[18px] h-[18px]" />
-        </span>
+        <CalendarClock className="w-6 h-6 shrink-0 text-primary-600" />
         <div>
           <h3 className="text-[15px] font-bold flex items-center gap-2">
             Monthly Interest Collection <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary-50 text-primary-600">{rows.length}</span>
@@ -55,9 +53,9 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
           <thead>
             <tr>
               <Th>Customer</Th>
-              <Th>Phone</Th>
-              <Th>Loan ID</Th>
-              <Th>Next Due</Th>
+              <Th className="hidden sm:table-cell">Phone</Th>
+              <Th className="hidden md:table-cell">Loan ID</Th>
+              <Th className="hidden sm:table-cell">Next Due</Th>
               <Th>Amount</Th>
               <Th>Status</Th>
               <Th />
@@ -78,13 +76,13 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
                       </Link>
                     </div>
                   </Td>
-                  <Td>{c?.phone}</Td>
-                  <Td>
+                  <Td className="hidden sm:table-cell">{c?.phone}</Td>
+                  <Td className="hidden md:table-cell">
                     <Link href={`/loans/${l.id}`} className="text-primary font-mono hover:underline">
                       {l.id}
                     </Link>
                   </Td>
-                  <Td className="text-text-secondary">{formatDate(nextDueDate)}</Td>
+                  <Td className="hidden sm:table-cell text-text-secondary">{formatDate(nextDueDate)}</Td>
                   <Td className="font-bold">{formatCurrency(pendingWhole > 0.01 ? pendingWhole : l.balance.interestPerPeriod)}</Td>
                   <Td className={pendingWhole > 0.01 ? "text-danger font-semibold" : daysUntil === 0 ? "text-warning-dark font-semibold" : "text-text-secondary"}>
                     {pendingWhole > 0.01 ? (

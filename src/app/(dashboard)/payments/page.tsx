@@ -3,7 +3,7 @@ import { PaymentsTable, ExportPaymentsButton } from "@/components/payments/Payme
 import { AddPaymentIconButton } from "@/components/payments/PaymentFormModal";
 import { StatCard } from "@/components/ui/StatCard";
 import { formatCurrency } from "@/lib/format";
-import { Wallet, Percent, TrendingUp, Receipt } from "lucide-react";
+import { Wallet, Percent, TrendingUp, Receipt } from "@/components/ui/icons";
 
 export const metadata = { title: "Payments — LendPro" };
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export default async function PaymentsPage() {
           <AddPaymentIconButton />
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard label="Payments" value={payments.length} icon={Receipt} tone="primary" />
         <StatCard label="Total Collected" value={formatCurrency(totals.amount)} icon={Wallet} tone="success" />
         <StatCard label="Interest Portion" value={formatCurrency(totals.interest)} icon={Percent} tone="purple" />

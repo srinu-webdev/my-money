@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, LogOut, Settings, UserCircle } from "lucide-react";
+import { ChevronDown, LogOut, Settings, UserCircle } from "@/components/ui/icons";
 import { Avatar } from "@/components/ui/Avatar";
 import { logoutAction } from "@/lib/actions/auth";
 

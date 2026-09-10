@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, Clock, TrendingUp, Wallet } from "lucide-react";
+import { Calendar, Clock, TrendingUp, Wallet } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -25,14 +25,13 @@ function Section({ title, sub, items, tone, icon: Icon, customers }: { title: st
   const recordPayment = usePaymentFormModal();
   const total = items.reduce((s, x) => s + x.loan.balance.totalOutstanding, 0);
   const toneClass = { danger: "bg-danger-light text-danger", warning: "bg-warning-light text-warning-dark", primary: "bg-primary-50 text-primary-600" }[tone];
+  const toneText = { danger: "text-danger", warning: "text-warning-dark", primary: "text-primary-600" }[tone];
 
   return (
     <Card className="mb-5">
       <div className="flex items-center justify-between gap-3 px-4 sm:px-[22px] py-[18px] border-b border-border flex-wrap">
         <div className="flex items-center gap-3">
-          <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${toneClass}`}>
-            <Icon className="w-[18px] h-[18px]" />
-          </span>
+          <Icon className={`w-6 h-6 shrink-0 ${toneText}`} />
           <div>
             <h3 className="text-[15px] font-bold flex items-center gap-2">
               {title} <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${toneClass}`}>{items.length}</span>
@@ -48,12 +47,12 @@ function Section({ title, sub, items, tone, icon: Icon, customers }: { title: st
             <thead>
               <tr>
                 <Th>Customer</Th>
-                <Th>Phone</Th>
-                <Th>Loan ID</Th>
+                <Th className="hidden sm:table-cell">Phone</Th>
+                <Th className="hidden md:table-cell">Loan ID</Th>
                 <Th>Amount Due</Th>
-                <Th>Interest Due</Th>
-                <Th>Principal Due</Th>
-                <Th>Due Date</Th>
+                <Th className="hidden lg:table-cell">Interest Due</Th>
+                <Th className="hidden lg:table-cell">Principal Due</Th>
+                <Th className="hidden md:table-cell">Due Date</Th>
                 <Th>Status</Th>
                 <Th />
               </tr>
@@ -71,16 +70,16 @@ function Section({ title, sub, items, tone, icon: Icon, customers }: { title: st
                       </Link>
                     </div>
                   </Td>
-                  <Td>{c?.phone}</Td>
-                  <Td>
+                  <Td className="hidden sm:table-cell">{c?.phone}</Td>
+                  <Td className="hidden md:table-cell">
                     <Link href={`/loans/${l.id}`} className="text-primary font-mono hover:underline">
                       {l.id}
                     </Link>
                   </Td>
                   <Td className="font-bold">{formatCurrency(l.balance.totalOutstanding)}</Td>
-                  <Td>{formatCurrency(l.balance.interestRemaining)}</Td>
-                  <Td>{formatCurrency(l.balance.principalRemaining)}</Td>
-                  <Td className={tone === "danger" ? "text-danger font-semibold" : tone === "warning" ? "text-warning-dark font-semibold" : "text-text-secondary"}>
+                  <Td className="hidden lg:table-cell">{formatCurrency(l.balance.interestRemaining)}</Td>
+                  <Td className="hidden lg:table-cell">{formatCurrency(l.balance.principalRemaining)}</Td>
+                  <Td className={`hidden md:table-cell ${tone === "danger" ? "text-danger font-semibold" : tone === "warning" ? "text-warning-dark font-semibold" : "text-text-secondary"}`}>
                     {formatDate(l.dueDate)}
                     <div className="text-xs font-normal text-text-tertiary">{label}</div>
                   </Td>
@@ -131,7 +130,7 @@ export function DuePaymentsSections({
         </div>
         <AddPaymentIconButton />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard label="Due Today" value={formatCurrency(sum(today))} icon={Calendar} tone="danger" hint={`${today.length} loan${today.length === 1 ? "" : "s"}`} />
         <StatCard label="Due Tomorrow" value={formatCurrency(sum(tomorrow))} icon={Clock} tone="warning" hint={`${tomorrow.length} loan${tomorrow.length === 1 ? "" : "s"}`} />
         <StatCard label="Upcoming (30 days)" value={formatCurrency(sum(upcoming))} icon={TrendingUp} tone="primary" hint={`${upcoming.length} loan${upcoming.length === 1 ? "" : "s"}`} />

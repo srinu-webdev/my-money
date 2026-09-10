@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Percent } from "lucide-react";
+import { Search, Percent } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Field";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -58,7 +58,7 @@ export function InterestTable({ loans, customerNames }: { loans: LoanRow[]; cust
 
   return (
     <div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {[
           ["Interest Accrued", totals.accrued, "text-text"],
           ["Interest Collected", totals.paid, "text-success-dark"],

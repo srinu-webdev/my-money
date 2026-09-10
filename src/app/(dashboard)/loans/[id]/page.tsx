@@ -1,15 +1,15 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@/components/ui/icons";
 import { getActivitiesFor, getCustomerById, getDisbursementsByLoan, getLoanById, getPaymentsByLoan } from "@/lib/queries";
 import { calculateInterestForLoan, calculateLoanBalance, getLoanSchedule, getLoanStatus, nextMonthlyCollectionDate, FREQ_LABEL, FREQ_NOUN } from "@/lib/calculations";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock } from "@/components/ui/icons";
 import { StatusBadge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { formatCurrency } from "@/lib/format";
 import { businessNow, daysBetween, formatDate, formatDateTime } from "@/lib/dates";
-import { Wallet, Percent, CheckCircle2, Clock, TrendingUp, CreditCard, AlertTriangle, Info, HandCoins } from "lucide-react";
+import { Wallet, Percent, CheckCircle, Clock, TrendingUp, CreditCard, AlertTriangle, Info, HandCoins } from "@/components/ui/icons";
 import { LoanDetailTabs } from "@/components/loans/LoanDetailTabs";
 import { LoanDetailActions } from "@/components/loans/LoanDetailActions";
 import { AddDisbursementButton, DisbursementHistoryRow } from "@/components/loans/DisbursementFormModal";
@@ -135,7 +135,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
       )}
       {dailyPlan && status !== "PAID" && status !== "CANCELLED" && (
         <div className={`flex gap-2.5 rounded-[10px] px-4 py-3 text-[13px] mb-5 ${dailyPlan.catchUpAmount > 0 ? "bg-danger-light text-danger-dark dark:text-red-300" : "bg-success-light text-success-dark dark:text-emerald-300"}`}>
-          {dailyPlan.catchUpAmount > 0 ? <AlertTriangle className="w-[18px] h-[18px] shrink-0 mt-0.5" /> : <CheckCircle2 className="w-[18px] h-[18px] shrink-0 mt-0.5" />}
+          {dailyPlan.catchUpAmount > 0 ? <AlertTriangle className="w-[18px] h-[18px] shrink-0 mt-0.5" /> : <CheckCircle className="w-[18px] h-[18px] shrink-0 mt-0.5" />}
           <span>
             <strong>Day {dailyPlan.daysElapsed} of {dailyPlan.totalDays}.</strong>{" "}
             {dailyPlan.catchUpAmount > 0 ? (
@@ -165,7 +165,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard
           label="Agreed Principal"
           value={formatCurrency(balance.principal)}
@@ -174,7 +174,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           hint={balance.pendingDisbursement > 0 ? `${formatCurrency(balance.totalDisbursed)} disbursed · ${rateLabel}` : rateLabel}
         />
         <StatCard label="Interest Accrued" value={formatCurrency(balance.interestAccrued)} icon={Percent} tone="purple" hint={`${formatCurrency(balance.interestPerPeriod)} per period on current balance`} />
-        <StatCard label="Interest Paid" value={formatCurrency(balance.interestPaid)} icon={CheckCircle2} tone="success" />
+        <StatCard label="Interest Paid" value={formatCurrency(balance.interestPaid)} icon={CheckCircle} tone="success" />
         <StatCard
           label="Interest Remaining"
           value={formatCurrency(balance.interestRemaining)}
@@ -253,7 +253,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                 <b>{paidPct}%</b>
               </div>
               <div className="h-2 bg-surface-3 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-primary to-purple rounded-full" style={{ width: `${paidPct}%` }} />
+                <div className="h-full bg-primary-600 rounded-full" style={{ width: `${paidPct}%` }} />
               </div>
               <div className="flex justify-between text-xs text-text-tertiary mt-2">
                 <span>{formatCurrency(balance.principalPaid)}</span>

@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { toast } from "@/lib/toast";
-import { Check, Download, Info } from "lucide-react";
+import { Check, Download, Info } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormGroup, Input, Select, Textarea, Checkbox } from "@/components/ui/Field";

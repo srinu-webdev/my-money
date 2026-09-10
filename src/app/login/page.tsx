@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@/components/ui/icons";
 import { getCurrentAdmin } from "@/lib/queries";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { AuthSidePanel } from "@/components/auth/AuthSidePanel";
@@ -28,14 +28,6 @@ export default async function LoginPage() {
             <Link href="/signup" className="text-primary font-semibold hover:underline">
               Create your own profile
             </Link>
-          </p>
-          <div className="bg-primary-50 border border-dashed border-primary-200 rounded-xl px-3.5 py-3 text-[12.5px] text-primary-700 dark:text-indigo-300 leading-relaxed mt-5">
-            <strong>Demo credentials</strong>
-            <br />
-            Email: <code className="bg-surface px-1.5 py-0.5 rounded font-semibold">admin@example.com</code> &nbsp; Password: <code className="bg-surface px-1.5 py-0.5 rounded font-semibold">admin123</code>
-          </div>
-          <p className="text-xs text-text-tertiary mt-4 leading-relaxed">
-            This login uses a real server-side session (bcrypt-hashed password, signed HttpOnly JWT cookie) backed by Postgres — not a browser-only simulation.
           </p>
         </div>
       </div>

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { Download, Eye, Edit, Trash2, Search, Wallet } from "lucide-react";
+import { Download, Eye, Edit, Trash, Search, Wallet } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Field";
 import { Table, TableWrap, Th, SortTh, Td } from "@/components/ui/Table";
@@ -136,7 +136,7 @@ export function PaymentsTable({
         <div className="flex items-center gap-2.5 px-4 sm:px-[22px] py-2.5 bg-primary-50 border-b border-primary-200 text-[13px] font-medium text-primary-700 dark:text-indigo-300 flex-wrap">
           <span>{selected.size} selected</span>
           <Button size="sm" variant="danger" onClick={handleBulkDelete}>
-            <Trash2 /> Delete
+            <Trash /> Delete
           </Button>
           <button className="ml-auto text-xs font-semibold hover:underline" onClick={() => setSelected(new Set())}>
             Clear selection
@@ -163,16 +163,24 @@ export function PaymentsTable({
                       className="w-[15px] h-[15px] accent-primary cursor-pointer"
                     />
                   </Th>
-                  <Th>Payment ID</Th>
+                  <Th className="hidden sm:table-cell">Payment ID</Th>
                   {!hideCustomer && <Th>Customer</Th>}
-                  {!hideLoan && <Th>Loan</Th>}
-                  {showToolbar ? <SortTh label="Total Amount" active={field === "amount"} dir={dir} onClick={() => toggle("amount")} /> : <Th>Total Amount</Th>}
-                  <Th>Interest</Th>
-                  <Th>Principal</Th>
-                  <Th>Method</Th>
-                  {showToolbar ? <SortTh label="Date" active={field === "paymentDate"} dir={dir} onClick={() => toggle("paymentDate")} /> : <Th>Date</Th>}
-                  <Th>Reference</Th>
-                  <Th>Recorded By</Th>
+                  {!hideLoan && <Th className="hidden md:table-cell">Loan</Th>}
+                  {showToolbar ? (
+                    <SortTh label="Total Amount" active={field === "amount"} dir={dir} onClick={() => toggle("amount")} />
+                  ) : (
+                    <Th>Total Amount</Th>
+                  )}
+                  <Th className="hidden lg:table-cell">Interest</Th>
+                  <Th className="hidden lg:table-cell">Principal</Th>
+                  <Th className="hidden md:table-cell">Method</Th>
+                  {showToolbar ? (
+                    <SortTh label="Date" active={field === "paymentDate"} dir={dir} onClick={() => toggle("paymentDate")} className="hidden sm:table-cell" />
+                  ) : (
+                    <Th className="hidden sm:table-cell">Date</Th>
+                  )}
+                  <Th className="hidden lg:table-cell">Reference</Th>
+                  <Th className="hidden lg:table-cell">Recorded By</Th>
                   <Th />
                 </tr>
               </thead>
@@ -194,7 +202,7 @@ export function PaymentsTable({
                         className="w-[15px] h-[15px] accent-primary cursor-pointer"
                       />
                     </Td>
-                    <Td>
+                    <Td className="hidden sm:table-cell">
                       <button onClick={() => viewPayment(p)} className="text-primary font-mono font-semibold hover:underline">
                         {p.id}
                       </button>
@@ -210,29 +218,29 @@ export function PaymentsTable({
                       </Td>
                     )}
                     {!hideLoan && (
-                      <Td>
+                      <Td className="hidden md:table-cell">
                         <Link href={`/loans/${p.loanId}`} className="text-primary font-mono hover:underline">
                           {p.loanId}
                         </Link>
                       </Td>
                     )}
                     <Td className="font-semibold">{formatCurrency(p.amount)}</Td>
-                    <Td className="text-success-dark">{formatCurrency(p.interestAmount)}</Td>
-                    <Td>{formatCurrency(p.principalAmount)}</Td>
-                    <Td>
+                    <Td className="hidden lg:table-cell text-success-dark">{formatCurrency(p.interestAmount)}</Td>
+                    <Td className="hidden lg:table-cell">{formatCurrency(p.principalAmount)}</Td>
+                    <Td className="hidden md:table-cell">
                       <Badge tone="gray" plain>
                         {p.paymentMethod}
                       </Badge>
                     </Td>
-                    <Td className="text-text-secondary">{formatDate(p.paymentDate)}</Td>
-                    <Td className="text-text-secondary">{p.reference || "—"}</Td>
-                    <Td className="text-text-secondary">{p.recordedBy}</Td>
+                    <Td className="hidden sm:table-cell text-text-secondary">{formatDate(p.paymentDate)}</Td>
+                    <Td className="hidden lg:table-cell text-text-secondary">{p.reference || "—"}</Td>
+                    <Td className="hidden lg:table-cell text-text-secondary">{p.recordedBy}</Td>
                     <Td>
                       <Dropdown
                         items={[
                           { label: "View", icon: <Eye />, onClick: () => viewPayment(p) },
                           { label: "Edit", icon: <Edit />, onClick: () => editPayment({ payment: p }) },
-                          { label: "Delete", icon: <Trash2 />, danger: true, onClick: () => handleDelete(p) },
+                          { label: "Delete", icon: <Trash />, danger: true, onClick: () => handleDelete(p) },
                         ]}
                       />
                     </Td>

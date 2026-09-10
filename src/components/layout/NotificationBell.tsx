@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell } from "lucide-react";
+import { Bell } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import type { Notification } from "@/lib/types";
 import { markAllNotificationsReadAction, markNotificationReadAction } from "@/lib/actions/notifications";
@@ -86,8 +86,8 @@ export function NotificationBell({ notifications, unreadCount }: { notifications
 export function NotifIconBadge({ type }: { type: string }) {
   const { Icon, cls } = notifIcon(type);
   return (
-    <span className={cn("w-[34px] h-[34px] rounded-[10px] flex items-center justify-center shrink-0", cls)}>
-      <Icon className="w-4 h-4" />
+    <span className={cn("w-[34px] h-[34px] rounded-full bg-surface-3 flex items-center justify-center shrink-0", cls)}>
+      <Icon className="w-[18px] h-[18px]" />
     </span>
   );
 }

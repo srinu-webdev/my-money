@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { Search, AlertTriangle, CheckCircle2, Download, Send } from "lucide-react";
+import { Search, AlertTriangle, CheckCircle, Download, Send } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Field";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -93,7 +93,7 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard label="Overdue Loans" value={counts.all} icon={AlertTriangle} tone="danger" />
         <StatCard label="Overdue Amount" value={formatCurrency(totalOutstanding)} icon={AlertTriangle} tone="danger" hint="Principal + pending interest" />
         <StatCard label="1–30 Days" value={counts["1-7"] + counts["8-30"]} icon={AlertTriangle} tone="warning" hint="Early stage" />
@@ -124,15 +124,15 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
                 <thead>
                   <tr>
                     <Th>Customer</Th>
-                    <Th>Phone</Th>
-                    <Th>Loan ID</Th>
-                    <Th>Original Principal</Th>
-                    <Th>Outstanding Principal</Th>
-                    <Th>Interest Pending</Th>
+                    <Th className="hidden sm:table-cell">Phone</Th>
+                    <Th className="hidden md:table-cell">Loan ID</Th>
+                    <Th className="hidden lg:table-cell">Original Principal</Th>
+                    <Th className="hidden lg:table-cell">Outstanding Principal</Th>
+                    <Th className="hidden lg:table-cell">Interest Pending</Th>
                     <Th>Total Outstanding</Th>
-                    <Th>Due Date</Th>
+                    <Th className="hidden md:table-cell">Due Date</Th>
                     <Th>Days Overdue</Th>
-                    <Th>Last Payment</Th>
+                    <Th className="hidden lg:table-cell">Last Payment</Th>
                     <Th />
                   </tr>
                 </thead>
@@ -149,23 +149,23 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
                             </Link>
                           </div>
                         </Td>
-                        <Td>{c?.phone}</Td>
-                        <Td>
+                        <Td className="hidden sm:table-cell">{c?.phone}</Td>
+                        <Td className="hidden md:table-cell">
                           <Link href={`/loans/${l.id}`} className="text-primary font-mono hover:underline">
                             {l.id}
                           </Link>
                         </Td>
-                        <Td>{formatCurrency(l.principal)}</Td>
-                        <Td>{formatCurrency(l.balance.principalRemaining)}</Td>
-                        <Td className="text-warning-dark">{formatCurrency(l.balance.interestRemaining)}</Td>
+                        <Td className="hidden lg:table-cell">{formatCurrency(l.principal)}</Td>
+                        <Td className="hidden lg:table-cell">{formatCurrency(l.balance.principalRemaining)}</Td>
+                        <Td className="hidden lg:table-cell text-warning-dark">{formatCurrency(l.balance.interestRemaining)}</Td>
                         <Td className="font-bold text-danger">{formatCurrency(l.balance.totalOutstanding)}</Td>
-                        <Td className="text-danger">{formatDate(l.dueDate)}</Td>
+                        <Td className="hidden md:table-cell text-danger">{formatDate(l.dueDate)}</Td>
                         <Td>
                           <Badge tone={sev(l.balance.daysOverdue)}>
                             {l.balance.daysOverdue} day{l.balance.daysOverdue === 1 ? "" : "s"}
                           </Badge>
                         </Td>
-                        <Td className="text-text-secondary">
+                        <Td className="hidden lg:table-cell text-text-secondary">
                           {l.balance.lastPaymentDate ? (
                             <>
                               {formatDate(l.balance.lastPaymentDate)}
@@ -194,7 +194,7 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
             <Pagination page={page} totalPages={totalPages} total={total} start={startIdx} end={endIdx} label="overdue loans" onChange={setPage} />
           </>
         ) : (
-          <EmptyState icon={CheckCircle2} title="No overdue loans" text={bucket !== "all" || search ? "No loans match this filter." : "Great — every loan is within its due date."} />
+          <EmptyState icon={CheckCircle} title="No overdue loans" text={bucket !== "all" || search ? "No loans match this filter." : "Great — every loan is within its due date."} />
         )}
       </Card>
     </div>

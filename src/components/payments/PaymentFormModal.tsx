@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { Plus, Wallet } from "lucide-react";
+import { Plus, Wallet } from "@/components/ui/icons";
 import { useModal } from "@/components/providers/ModalProvider";
 import { ModalHeader, ModalBody, ModalFooter, FormError } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";

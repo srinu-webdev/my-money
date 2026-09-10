@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@/components/ui/icons";
 import type { ButtonHTMLAttributes } from "react";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "success" | "soft";
@@ -12,8 +12,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    "bg-gradient-to-br from-primary to-primary-600 text-white shadow-[0_2px_8px_rgba(99,102,241,0.35)] hover:shadow-[0_6px_18px_rgba(99,102,241,0.45)] hover:-translate-y-px",
+  primary: "bg-primary-600 text-white shadow-card-sm hover:bg-primary-700",
   secondary: "bg-surface border border-border-strong text-text hover:bg-surface-2 hover:border-text-tertiary",
   ghost: "bg-transparent text-text-secondary hover:bg-surface-3 hover:text-text",
   danger: "bg-danger text-white hover:bg-danger-dark",
@@ -43,7 +42,7 @@ export function Button({ variant = "primary", size = "md", loading, className, d
       disabled={disabled || loading}
       {...props}
     >
-      {loading ? <Loader2 className="animate-spin" /> : null}
+      {loading ? <Spinner className="animate-spin" /> : null}
       {children}
     </button>
   );

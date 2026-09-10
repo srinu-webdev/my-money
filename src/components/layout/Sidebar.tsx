@@ -18,8 +18,9 @@ import {
   LogOut,
   ChevronLeft,
   X,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import { BrandMark } from "@/components/ui/BrandLogo";
 import { logoutAction } from "@/lib/actions/auth";
 
 interface NavItem {
@@ -108,9 +109,7 @@ export function Sidebar({
         )}
       >
         <div className={cn("flex items-center gap-3 px-5 h-[68px] border-b border-border shrink-0", collapsed && "justify-center px-0")}>
-          <span className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-primary to-purple flex items-center justify-center text-white font-extrabold text-base shrink-0 shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
-            L
-          </span>
+          <BrandMark className="w-9 h-9" />
           {!collapsed && (
             <span className="font-extrabold text-lg tracking-tight leading-tight">
               LendPro

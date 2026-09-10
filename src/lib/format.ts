@@ -31,19 +31,23 @@ export function initials(name: string | null | undefined): string {
   );
 }
 
-const AVATAR_PALETTES = [
-  ["#6366f1", "#8b5cf6"],
-  ["#0ea5e9", "#6366f1"],
-  ["#10b981", "#0ea5e9"],
-  ["#f59e0b", "#ef4444"],
-  ["#ec4899", "#8b5cf6"],
-  ["#14b8a6", "#10b981"],
-  ["#f97316", "#f59e0b"],
+// Flat initial-avatar colours: a soft tint with a darker ink of the same
+// hue (the Google-Contacts convention), chosen deterministically per name
+// so a customer keeps the same colour everywhere they appear.
+const AVATAR_COLORS: { bg: string; fg: string }[] = [
+  { bg: "#e0e7ff", fg: "#3730a3" },
+  { bg: "#dbeafe", fg: "#1e40af" },
+  { bg: "#d1fae5", fg: "#065f46" },
+  { bg: "#fef3c7", fg: "#92400e" },
+  { bg: "#fce7f3", fg: "#9d174d" },
+  { bg: "#ccfbf1", fg: "#115e59" },
+  { bg: "#ffedd5", fg: "#9a3412" },
+  { bg: "#ede9fe", fg: "#5b21b6" },
 ];
 
-export function avatarGradient(seed: string): string {
+export function avatarStyle(seed: string): { backgroundColor: string; color: string } {
   let h = 0;
   for (const ch of String(seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const [a, b] = AVATAR_PALETTES[h % AVATAR_PALETTES.length];
-  return `linear-gradient(135deg, ${a}, ${b})`;
+  const { bg, fg } = AVATAR_COLORS[h % AVATAR_COLORS.length];
+  return { backgroundColor: bg, color: fg };
 }

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Calendar, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowLeft, Calendar, Mail, MapPin, Phone } from "@/components/ui/icons";
 import { getActivitiesFor, getCustomerWithSummary, getDisbursementsByLoan, getLoansByCustomer, getPaymentsByCustomer } from "@/lib/queries";
 import { calculateLoanBalance, getLoanStatus } from "@/lib/calculations";
 import { Avatar } from "@/components/ui/Avatar";

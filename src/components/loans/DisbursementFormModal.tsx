@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { HandCoins, Trash2 } from "lucide-react";
+import { HandCoins, Trash } from "@/components/ui/icons";
 import { useModal } from "@/components/providers/ModalProvider";
 import { ModalHeader, ModalBody, ModalFooter, FormError } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -117,7 +117,7 @@ export function DisbursementHistoryRow({ d }: { d: Disbursement }) {
         <div className="text-text-tertiary text-[12px]">{formatDate(d.date)}{d.notes ? ` · ${d.notes}` : ""}</div>
       </div>
       <button type="button" onClick={() => startTransition(handleDelete)} disabled={pending} className="text-text-tertiary hover:text-danger p-1.5 rounded-md hover:bg-danger-light transition-colors" title="Remove">
-        <Trash2 className="w-3.5 h-3.5" />
+        <Trash className="w-3.5 h-3.5" />
       </button>
     </div>
   );

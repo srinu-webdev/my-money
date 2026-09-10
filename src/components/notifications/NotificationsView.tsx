@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Trash2 } from "lucide-react";
+import { Bell, Check, Trash } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -83,7 +83,7 @@ export function NotificationsView({ notifications }: { notifications: Notificati
               })
             }
           >
-            <Trash2 /> Clear all
+            <Trash /> Clear all
           </Button>
         </div>
       </div>
@@ -105,8 +105,8 @@ export function NotificationsView({ notifications }: { notifications: Notificati
               return (
                 <div key={n.id} className={cn("flex gap-3 px-4 sm:px-[22px] py-3 border-b border-border last:border-0 items-start", !n.read && "bg-primary-50/60")}>
                   <button onClick={() => openNotif(n)} className="flex gap-3 flex-1 min-w-0 text-left">
-                    <span className={cn("w-[34px] h-[34px] rounded-[10px] flex items-center justify-center shrink-0", cls)}>
-                      <Icon className="w-4 h-4" />
+                    <span className={cn("w-[34px] h-[34px] rounded-full bg-surface-3 flex items-center justify-center shrink-0", cls)}>
+                      <Icon className="w-[18px] h-[18px]" />
                     </span>
                     <span className="min-w-0">
                       <div className="text-[13px] font-medium leading-snug">{n.message}</div>
@@ -141,7 +141,7 @@ export function NotificationsView({ notifications }: { notifications: Notificati
                         })
                       }
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>

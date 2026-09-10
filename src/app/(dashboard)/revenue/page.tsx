@@ -5,7 +5,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { MoneyBarChart, MoneyLineChart } from "@/components/charts/Charts";
 import { PaymentsTable, ExportPaymentsButton } from "@/components/payments/PaymentsTable";
 import { formatCurrency } from "@/lib/format";
-import { Percent, CheckCircle2, Clock, TrendingUp, Wallet } from "lucide-react";
+import { Percent, CheckCircle, Clock, TrendingUp, Wallet } from "@/components/ui/icons";
 
 export const metadata = { title: "Revenue — LendPro" };
 export const dynamic = "force-dynamic";
@@ -27,9 +27,9 @@ export default async function RevenuePage() {
         </div>
         <ExportPaymentsButton payments={payments} customerNames={names} />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
         <StatCard label="Total Interest Earned" value={formatCurrency(stats.interestEarned)} icon={Percent} tone="primary" hint="Accrued to date" />
-        <StatCard label="Interest Collected" value={formatCurrency(stats.interestEarned - stats.interestPending)} icon={CheckCircle2} tone="success" />
+        <StatCard label="Interest Collected" value={formatCurrency(stats.interestEarned - stats.interestPending)} icon={CheckCircle} tone="success" />
         <StatCard label="Interest Pending" value={formatCurrency(stats.interestPending)} icon={Clock} tone="warning" />
         <StatCard label="Principal Collected" value={formatCurrency(principalCollected)} icon={TrendingUp} tone="info" />
         <StatCard label="Total Collections" value={formatCurrency(stats.totalCollected)} icon={Wallet} tone="purple" />

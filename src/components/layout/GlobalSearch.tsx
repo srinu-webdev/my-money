@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, User, CreditCard, Wallet } from "lucide-react";
+import { Search, User, CreditCard, Wallet } from "@/components/ui/icons";
 import { globalSearchAction, type SearchResult } from "@/lib/actions/search";
 
 const ICON = { customer: User, loan: CreditCard, payment: Wallet } as const;
@@ -92,9 +92,7 @@ export function GlobalSearch() {
                     const Icon = ICON[r.kind];
                     return (
                       <button key={r.id} onClick={() => go(r)} className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-[10px] hover:bg-surface-3 transition-colors text-left">
-                        <span className="w-8 h-8 rounded-[9px] bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
-                          <Icon className="w-[15px] h-[15px]" />
-                        </span>
+                        <Icon className="w-[18px] h-[18px] text-text-tertiary shrink-0" />
                         <span className="min-w-0">
                           <div className="font-semibold text-[13px] truncate">{r.title}</div>
                           <div className="text-[11.5px] text-text-tertiary truncate">{r.sub}</div>

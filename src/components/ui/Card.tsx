@@ -2,7 +2,11 @@ import { cn } from "@/lib/cn";
 import type { HTMLAttributes, ReactNode } from "react";
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("bg-surface border border-border rounded-2xl shadow-card-sm", className)} {...props} />;
+  // min-w-0 overrides the flex/grid item default of min-width:auto — without
+  // it, a Card holding a wide table (even one wrapped in overflow-x-auto)
+  // forces its whole flex/grid track wider than the container instead of
+  // scrolling internally, breaking layout on every narrower device.
+  return <div className={cn("bg-surface border border-border rounded-2xl shadow-card-sm min-w-0", className)} {...props} />;
 }
 
 export function CardHeader({ title, sub, actions, className }: { title: ReactNode; sub?: ReactNode; actions?: ReactNode; className?: string }) {

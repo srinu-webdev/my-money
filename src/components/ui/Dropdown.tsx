@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { MoreVertical } from "lucide-react";
+import { DotsVertical } from "@/components/ui/icons";
 
 export interface DropdownItem {
   label: string;
@@ -36,7 +36,7 @@ export function Dropdown({ trigger, items, align = "right" }: { trigger?: ReactN
         className="w-8 h-8 rounded-lg flex items-center justify-center text-text-secondary hover:bg-surface-3 hover:text-text transition-colors"
         aria-label="Actions"
       >
-        {trigger ?? <MoreVertical className="w-4 h-4" />}
+        {trigger ?? <DotsVertical className="w-4 h-4" />}
       </button>
       {open ? (
         <div

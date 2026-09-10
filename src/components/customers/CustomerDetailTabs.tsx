@@ -14,7 +14,7 @@ import { formatDate } from "@/lib/dates";
 import { FREQ_LABEL, nextMonthlyCollectionDate } from "@/lib/calculations";
 import type { CustomerRow, LoanRow } from "@/lib/queries";
 import type { Activity, Payment } from "@/lib/types";
-import { CreditCard, Percent, Wallet } from "lucide-react";
+import { CreditCard, Percent, Wallet } from "@/components/ui/icons";
 
 export function CustomerDetailTabs({ customer, loans, payments, activities }: { customer: CustomerRow; loans: LoanRow[]; payments: Payment[]; activities: Activity[] }) {
   const [tab, setTab] = useState("overview");
@@ -65,7 +65,7 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                 <b>{pct}%</b>
               </div>
               <div className="h-2 bg-surface-3 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-primary to-purple rounded-full" style={{ width: `${pct}%` }} />
+                <div className="h-full bg-primary-600 rounded-full" style={{ width: `${pct}%` }} />
               </div>
               <div className="flex justify-between text-xs text-text-tertiary mt-2">
                 <span>{formatCurrency(s.principalPaid)} paid</span>
@@ -212,16 +212,18 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                     <Td>{formatCurrency(l.balance.principalRemaining)}</Td>
                     <Td>{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
                     <Td>
-                      {formatCurrency(l.balance.interestAccrued)}
-                      {l.balance.interestPendingWhole > 0.01 ? (
-                        <div className="text-xs font-normal text-warning-dark">
-                          {Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod)} month{Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod) === 1 ? "" : "s"} pending
-                        </div>
-                      ) : l.balance.interestRemaining > 0.01 && l.interestFrequency === "MONTHLY" ? (
-                        <div className="text-xs font-normal text-text-tertiary">Next due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
-                      ) : l.balance.interestAccrued > 0 ? (
-                        <div className="text-xs font-normal text-success-dark">fully paid</div>
-                      ) : null}
+                      <span className="inline-flex items-baseline gap-1.5">
+                        {formatCurrency(l.balance.interestAccrued)}
+                        {l.balance.interestPendingWhole > 0.01 ? (
+                          <span className="text-xs font-normal text-warning-dark">
+                            · {Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod)} month{Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod) === 1 ? "" : "s"} pending
+                          </span>
+                        ) : l.balance.interestRemaining > 0.01 && l.interestFrequency === "MONTHLY" ? (
+                          <span className="text-xs font-normal text-text-tertiary">· Next due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</span>
+                        ) : l.balance.interestAccrued > 0 ? (
+                          <span className="text-xs font-normal text-success-dark">· fully paid</span>
+                        ) : null}
+                      </span>
                     </Td>
                     <Td className="text-success-dark">{formatCurrency(l.balance.interestPaid)}</Td>
                     <Td className={l.balance.interestRemaining ? "text-warning-dark" : ""}>{formatCurrency(l.balance.interestRemaining)}</Td>

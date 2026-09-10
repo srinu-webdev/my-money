@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { Download, Eye, Edit, Trash2, CheckCircle2, XCircle, Plus, Search, Users } from "lucide-react";
+import { Download, Eye, Edit, Trash, CheckCircle, XCircle, Plus, Search, Users } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Field";
 import { Table, TableWrap, Th, SortTh, Td } from "@/components/ui/Table";
@@ -192,13 +192,13 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
         <div className="flex items-center gap-2.5 px-4 sm:px-[22px] py-2.5 bg-primary-50 border-b border-primary-200 text-[13px] font-medium text-primary-700 dark:text-indigo-300 flex-wrap">
           <span>{selected.size} selected</span>
           <Button size="sm" variant="secondary" onClick={() => bulkStatus("ACTIVE")}>
-            <CheckCircle2 /> Activate
+            <CheckCircle /> Activate
           </Button>
           <Button size="sm" variant="secondary" onClick={() => bulkStatus("INACTIVE")}>
             <XCircle /> Deactivate
           </Button>
           <Button size="sm" variant="danger" onClick={handleBulkDelete}>
-            <Trash2 /> Delete
+            <Trash /> Delete
           </Button>
           <button className="ml-auto text-xs font-semibold hover:underline" onClick={() => setSelected(new Set())}>
             Clear selection
@@ -215,18 +215,18 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                   <Th>
                     <input type="checkbox" checked={allSelected} onChange={(e) => toggleAll(e.target.checked)} className="w-[15px] h-[15px] accent-primary cursor-pointer" />
                   </Th>
-                  <SortTh label="Customer ID" active={field === "id"} dir={dir} onClick={() => toggle("id", true)} />
+                  <SortTh label="Customer ID" active={field === "id"} dir={dir} onClick={() => toggle("id", true)} className="hidden sm:table-cell" />
                   <SortTh label="Customer" active={field === "name"} dir={dir} onClick={() => toggle("name", true)} />
-                  <Th>Phone</Th>
-                  <Th>Email</Th>
-                  <SortTh label="Total Borrowed" active={field === "borrowed"} dir={dir} onClick={() => toggle("borrowed")} />
-                  <SortTh label="Total Paid" active={field === "paid"} dir={dir} onClick={() => toggle("paid")} />
-                  <Th>Interest Paid</Th>
+                  <Th className="hidden sm:table-cell">Phone</Th>
+                  <Th className="hidden lg:table-cell">Email</Th>
+                  <SortTh label="Total Borrowed" active={field === "borrowed"} dir={dir} onClick={() => toggle("borrowed")} className="hidden md:table-cell" />
+                  <SortTh label="Total Paid" active={field === "paid"} dir={dir} onClick={() => toggle("paid")} className="hidden md:table-cell" />
+                  <Th className="hidden lg:table-cell">Interest Paid</Th>
                   <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} />
-                  <Th>Active Loans</Th>
+                  <Th className="hidden sm:table-cell">Active Loans</Th>
                   <Th>Status</Th>
-                  <SortTh label="Loan Taken" active={field === "firstLoanDate"} dir={dir} onClick={() => toggle("firstLoanDate")} />
-                  <Th>Completed</Th>
+                  <SortTh label="Loan Taken" active={field === "firstLoanDate"} dir={dir} onClick={() => toggle("firstLoanDate")} className="hidden md:table-cell" />
+                  <Th className="hidden lg:table-cell">Completed</Th>
                   <Th />
                 </tr>
               </thead>
@@ -236,7 +236,7 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                     <Td>
                       <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleOne(c.id)} className="w-[15px] h-[15px] accent-primary cursor-pointer" />
                     </Td>
-                    <Td className="font-mono text-text-tertiary">{c.id}</Td>
+                    <Td className="hidden sm:table-cell font-mono text-text-tertiary">{c.id}</Td>
                     <Td>
                       <div className="flex items-center gap-2.5">
                         <Avatar name={c.name} size="sm" />
@@ -248,13 +248,13 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                         </div>
                       </div>
                     </Td>
-                    <Td>{c.phone}</Td>
-                    <Td className="text-text-secondary">{c.email || "—"}</Td>
-                    <Td className="mono-nums font-semibold">{formatCurrency(c.summary.totalBorrowed)}</Td>
-                    <Td className="mono-nums font-semibold text-success-dark">{formatCurrency(c.summary.totalPayments)}</Td>
-                    <Td className="mono-nums font-semibold">{formatCurrency(c.summary.interestPaid)}</Td>
+                    <Td className="hidden sm:table-cell">{c.phone}</Td>
+                    <Td className="hidden lg:table-cell text-text-secondary">{c.email || "—"}</Td>
+                    <Td className="hidden md:table-cell mono-nums font-semibold">{formatCurrency(c.summary.totalBorrowed)}</Td>
+                    <Td className="hidden md:table-cell mono-nums font-semibold text-success-dark">{formatCurrency(c.summary.totalPayments)}</Td>
+                    <Td className="hidden lg:table-cell mono-nums font-semibold">{formatCurrency(c.summary.interestPaid)}</Td>
                     <Td className={`mono-nums font-semibold ${c.summary.totalOutstanding > 0 ? "text-warning-dark" : ""}`}>{formatCurrency(c.summary.totalOutstanding)}</Td>
-                    <Td>
+                    <Td className="hidden sm:table-cell">
                       {c.summary.activeLoans}
                       {c.summary.overdueLoans ? (
                         <Badge tone="danger" plain className="ml-1.5 px-1.5">
@@ -265,8 +265,8 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                     <Td>
                       <Badge tone={c.status === "ACTIVE" ? "success" : "gray"}>{c.status === "ACTIVE" ? "Active" : "Inactive"}</Badge>
                     </Td>
-                    <Td className="text-text-secondary">{c.summary.firstLoanDate ? formatDate(c.summary.firstLoanDate) : "No loan yet"}</Td>
-                    <Td className="text-text-secondary">
+                    <Td className="hidden md:table-cell text-text-secondary">{c.summary.firstLoanDate ? formatDate(c.summary.firstLoanDate) : "No loan yet"}</Td>
+                    <Td className="hidden lg:table-cell text-text-secondary">
                       {c.summary.totalLoans > 0 && c.summary.activeLoans === 0 && c.summary.completedLoans > 0 ? (
                         c.summary.lastPaymentDate ? (
                           formatDate(c.summary.lastPaymentDate)
@@ -288,7 +288,7 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                           { sep: true, label: "", onClick: () => {} },
                           {
                             label: c.status === "ACTIVE" ? "Deactivate" : "Activate",
-                            icon: c.status === "ACTIVE" ? <XCircle /> : <CheckCircle2 />,
+                            icon: c.status === "ACTIVE" ? <XCircle /> : <CheckCircle />,
                             onClick: async () => {
                               const res = await setCustomerStatusAction(c.id, c.status === "ACTIVE" ? "INACTIVE" : "ACTIVE");
                               if (!res.ok) return toast.error(res.error);
@@ -296,7 +296,7 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                               router.refresh();
                             },
                           },
-                          { label: "Delete", icon: <Trash2 />, danger: true, onClick: () => handleDelete(c) },
+                          { label: "Delete", icon: <Trash />, danger: true, onClick: () => handleDelete(c) },
                         ]}
                       />
                     </Td>

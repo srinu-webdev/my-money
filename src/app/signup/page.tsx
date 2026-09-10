@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@/components/ui/icons";
 import { getCurrentAdmin } from "@/lib/queries";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { AuthSidePanel } from "@/components/auth/AuthSidePanel";
@@ -13,7 +13,7 @@ export default async function SignupPage() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
-      <AuthSidePanel heading="Your own admin profile, in under a minute." sub="Create your account to start managing customers, loans, interest and collections — all backed by a real database, not a browser demo." />
+      <AuthSidePanel heading="Your own admin profile, in under a minute." sub="Create your account to start managing customers, loans, interest and collections." />
 
       <div className="flex items-center justify-center p-6 sm:p-10 bg-bg">
         <div className="w-full max-w-[420px]">
@@ -28,9 +28,6 @@ export default async function SignupPage() {
             <Link href="/login" className="text-primary font-semibold hover:underline">
               Log in
             </Link>
-          </p>
-          <p className="text-xs text-text-tertiary mt-4 leading-relaxed">
-            Your password is hashed with bcrypt before it&rsquo;s stored — never kept in plain text — and your session is a signed HttpOnly cookie.
           </p>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { CaretDown, CaretUp, CaretUpDown } from "@/components/ui/icons";
 import type { ReactNode, TableHTMLAttributes, ThHTMLAttributes } from "react";
 
 export function TableWrap({ children }: { children: ReactNode }) {
@@ -22,10 +23,13 @@ export function Th({ className, ...props }: ThHTMLAttributes<HTMLTableCellElemen
 }
 
 export function SortTh({ label, active, dir, onClick, className }: { label: string; active: boolean; dir: "asc" | "desc"; onClick: () => void; className?: string }) {
+  const Arrow = active ? (dir === "asc" ? CaretUp : CaretDown) : CaretUpDown;
   return (
     <Th className={cn("cursor-pointer select-none hover:text-text", className)} onClick={onClick}>
-      {label}
-      <span className={cn("ml-1 text-[10px]", active ? "text-primary opacity-100" : "opacity-35")}>{active ? (dir === "asc" ? "▲" : "▼") : "⇅"}</span>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <Arrow className={cn("w-3 h-3", active ? "text-primary" : "opacity-40")} />
+      </span>
     </Th>
   );
 }

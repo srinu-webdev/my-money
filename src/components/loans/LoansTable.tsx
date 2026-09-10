@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { Download, Eye, Edit, Trash2, Wallet, History, User, Send, CheckCircle2, RefreshCw, XCircle, Search, CreditCard } from "lucide-react";
+import { Download, Eye, Edit, Trash, Wallet, History, User, Send, CheckCircle, Refresh, XCircle, Search, CreditCard } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Field";
 import { Table, TableWrap, Th, SortTh, Td } from "@/components/ui/Table";
@@ -151,13 +151,13 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                 <tr>
                   <SortTh label="Loan ID" active={field === "id"} dir={dir} onClick={() => toggle("id", true)} />
                   <SortTh label="Customer" active={field === "customer"} dir={dir} onClick={() => toggle("customer", true)} />
-                  <SortTh label="Principal" active={field === "principal"} dir={dir} onClick={() => toggle("principal")} />
-                  <Th>Rate</Th>
-                  <Th>Frequency</Th>
-                  <SortTh label="Start" active={field === "startDate"} dir={dir} onClick={() => toggle("startDate")} />
-                  <Th>Interest This Month</Th>
-                  <Th>Paid This Month</Th>
-                  <Th>Principal Paid</Th>
+                  <SortTh label="Principal" active={field === "principal"} dir={dir} onClick={() => toggle("principal")} className="hidden sm:table-cell" />
+                  <Th className="hidden sm:table-cell">Rate</Th>
+                  <Th className="hidden md:table-cell">Frequency</Th>
+                  <SortTh label="Start" active={field === "startDate"} dir={dir} onClick={() => toggle("startDate")} className="hidden md:table-cell" />
+                  <Th className="hidden lg:table-cell">Interest This Month</Th>
+                  <Th className="hidden lg:table-cell">Paid This Month</Th>
+                  <Th className="hidden lg:table-cell">Principal Paid</Th>
                   <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} />
                   <Th>Status</Th>
                   <Th />
@@ -182,28 +182,34 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                           </Link>
                         </div>
                       </Td>
-                      <Td className="font-semibold">{formatCurrency(l.principal)}</Td>
-                      <Td>{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
-                      <Td>{FREQ_LABEL[l.interestFrequency]}</Td>
-                      <Td className="text-text-secondary">{formatDate(l.startDate)}</Td>
-                      <Td>
-                        {formatCurrency(b.interestPerPeriod)}
-                        {b.interestPendingWhole > 0.01 ? (
-                          <div className="text-xs font-normal text-warning-dark">
-                            +{Math.round(b.interestPendingWhole / b.interestPerPeriod)} older month{Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1 ? "" : "s"} also pending · {formatCurrency(b.interestPendingWhole)}
-                          </div>
-                        ) : b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
-                          <div className="text-xs font-normal text-text-tertiary">Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
-                        ) : null}
+                      <Td className="hidden sm:table-cell font-semibold">{formatCurrency(l.principal)}</Td>
+                      <Td className="hidden sm:table-cell">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
+                      <Td className="hidden md:table-cell">{FREQ_LABEL[l.interestFrequency]}</Td>
+                      <Td className="hidden md:table-cell text-text-secondary">{formatDate(l.startDate)}</Td>
+                      <Td className="hidden lg:table-cell">
+                        {/* Everything stays on ONE line so every row is the same height —
+                            a second line here made rows with a due date taller than the rest. */}
+                        <span className="inline-flex items-baseline gap-1.5">
+                          {formatCurrency(b.interestPerPeriod)}
+                          {b.interestPendingWhole > 0.01 ? (
+                            <span className="text-xs font-normal text-warning-dark">
+                              · {Math.round(b.interestPendingWhole / b.interestPerPeriod)} older month{Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1 ? "" : "s"} pending ({formatCurrency(b.interestPendingWhole)})
+                            </span>
+                          ) : b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
+                            <span className="text-xs font-normal text-text-tertiary">· Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</span>
+                          ) : null}
+                        </span>
                       </Td>
-                      <Td className={b.interestPaidThisPeriod >= b.interestPerPeriod && b.interestPerPeriod > 0 ? "text-success-dark font-semibold" : "text-success-dark"}>
+                      <Td className={`hidden lg:table-cell ${b.interestPaidThisPeriod >= b.interestPerPeriod && b.interestPerPeriod > 0 ? "text-success-dark font-semibold" : "text-success-dark"}`}>
                         {formatCurrency(b.interestPaidThisPeriod)}
                       </Td>
-                      <Td className="text-success-dark">{formatCurrency(b.principalPaid)}</Td>
+                      <Td className="hidden lg:table-cell text-success-dark">{formatCurrency(b.principalPaid)}</Td>
                       <Td className={`font-semibold ${b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
                       <Td>
-                        <StatusBadge status={l.derivedStatus} />
-                        {b.daysOverdue ? <div className="text-xs font-normal text-danger mt-0.5">{b.daysOverdue}d overdue · due {formatDate(l.dueDate)}</div> : null}
+                        <span className="inline-flex items-center gap-2">
+                          <StatusBadge status={l.derivedStatus} />
+                          {b.daysOverdue ? <span className="text-xs font-normal text-danger">{b.daysOverdue}d · due {formatDate(l.dueDate)}</span> : null}
+                        </span>
                       </Td>
                       <Td>
                         <Dropdown
@@ -217,7 +223,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                             ...(open
                               ? [
                                   { label: "Send Reminder", icon: <Send />, onClick: () => sendReminder(l.id) },
-                                  { label: "Close Loan", icon: <CheckCircle2 />, onClick: () => handleClose(l) },
+                                  { label: "Close Loan", icon: <CheckCircle />, onClick: () => handleClose(l) },
                                   { label: "Cancel Loan", icon: <XCircle />, onClick: () => handleCancel(l) },
                                 ]
                               : []),
@@ -225,7 +231,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                               ? [
                                   {
                                     label: "Reactivate Loan",
-                                    icon: <RefreshCw />,
+                                    icon: <Refresh />,
                                     onClick: async () => {
                                       const res = await reactivateLoanAction(l.id);
                                       if (!res.ok) return toast.error(res.error);
@@ -235,7 +241,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                                   },
                                 ]
                               : []),
-                            { label: "Delete Loan", icon: <Trash2 />, danger: true, onClick: () => handleDelete(l) },
+                            { label: "Delete Loan", icon: <Trash />, danger: true, onClick: () => handleDelete(l) },
                           ]}
                         />
                       </Td>

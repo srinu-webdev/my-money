@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { CheckCircle2, Edit, RefreshCw, Trash2, XCircle } from "lucide-react";
+import { CheckCircle, Edit, Refresh, Trash, XCircle } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { cancelLoanAction, closeLoanAction, deleteLoanAction, reactivateLoanAction } from "@/lib/actions/loans";
@@ -84,7 +84,7 @@ export function LoanDetailActions({ loan, paymentsCount, status }: { loan: Loan;
       </Button>
       {status === "CANCELLED" && (
         <Button variant="secondary" loading={pending} onClick={handleReactivate}>
-          <RefreshCw /> Reactivate
+          <Refresh /> Reactivate
         </Button>
       )}
       {open && (
@@ -93,13 +93,13 @@ export function LoanDetailActions({ loan, paymentsCount, status }: { loan: Loan;
             <XCircle /> Cancel Loan
           </Button>
           <Button variant="secondary" loading={pending} onClick={handleClose}>
-            <CheckCircle2 /> Close Loan
+            <CheckCircle /> Close Loan
           </Button>
           <RecordPaymentButton loanId={loan.id} />
         </>
       )}
       <Button variant="ghost" className="text-danger" onClick={handleDelete}>
-        <Trash2 />
+        <Trash />
       </Button>
     </div>
   );

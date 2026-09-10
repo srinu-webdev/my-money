@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Info, Trash2 } from "lucide-react";
+import { AlertTriangle, Info, Trash } from "@/components/ui/icons";
 import type { ReactNode } from "react";
 import { useModal } from "@/components/providers/ModalProvider";
 import { Button } from "./Button";
@@ -8,7 +8,7 @@ import { ModalFooter } from "./Modal";
 
 type Tone = "danger" | "warning" | "primary";
 
-const TONE_ICON: Record<Tone, typeof Trash2> = { danger: Trash2, warning: AlertTriangle, primary: Info };
+const TONE_ICON: Record<Tone, typeof Trash> = { danger: Trash, warning: AlertTriangle, primary: Info };
 const TONE_CLASS: Record<Tone, string> = {
   danger: "bg-danger-light text-danger",
   warning: "bg-warning-light text-warning-dark",
@@ -42,7 +42,7 @@ export function useAlert() {
     openModal(
       <>
         <div className="px-6 pt-7 pb-2">
-          <div className={`w-[52px] h-[52px] rounded-2xl flex items-center justify-center mb-3.5 ${TONE_CLASS[tone]}`}>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3.5 ${TONE_CLASS[tone]}`}>
             <Icon className="w-6 h-6" />
           </div>
           <h3 className="text-lg font-extrabold mb-2">{opts.title}</h3>
@@ -59,11 +59,11 @@ export function useAlert() {
   };
 }
 
-function ConfirmBody({ opts, tone, Icon, closeModal }: { opts: ConfirmOptions; tone: Tone; Icon: typeof Trash2; closeModal: () => void }) {
+function ConfirmBody({ opts, tone, Icon, closeModal }: { opts: ConfirmOptions; tone: Tone; Icon: typeof Trash; closeModal: () => void }) {
   return (
     <>
       <div className="px-6 pt-7 pb-2">
-        <div className={`w-[52px] h-[52px] rounded-2xl flex items-center justify-center mb-3.5 ${TONE_CLASS[tone]}`}>
+        <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3.5 ${TONE_CLASS[tone]}`}>
           <Icon className="w-6 h-6" />
         </div>
         <h3 className="text-lg font-extrabold mb-2">{opts.title}</h3>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Download, Printer, Wallet, TrendingUp, Percent, Receipt, Clock, CreditCard, AlertTriangle, Users } from "lucide-react";
+import { Download, Printer, Wallet, TrendingUp, Percent, Receipt, Clock, CreditCard, AlertTriangle, Users } from "@/components/ui/icons";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -127,7 +127,7 @@ export function ReportsView({
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard label="Total Money Lent" value={formatCurrency(rep.lent)} icon={Wallet} tone="primary" hint={`${rep.lentCount} loan${rep.lentCount === 1 ? "" : "s"} disbursed in period`} />
         <StatCard label="Principal Collected" value={formatCurrency(rep.principalCollected)} icon={TrendingUp} tone="success" hint="In period" />
         <StatCard label="Interest Collected" value={formatCurrency(rep.interestCollected)} icon={Percent} tone="success" hint="In period" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Info } from "lucide-react";
+import { Info } from "@/components/ui/icons";
 import { Card } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
 import { Table, TableWrap, Th, Td } from "@/components/ui/Table";
@@ -12,7 +12,7 @@ import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/dates";
 import type { LoanScheduleSegment } from "@/lib/calculations";
 import type { Activity, Payment } from "@/lib/types";
-import { Wallet } from "lucide-react";
+import { Wallet } from "@/components/ui/icons";
 
 export function LoanDetailTabs({ payments, schedule, activities, interestAccrued }: { payments: Payment[]; schedule: LoanScheduleSegment[]; activities: Activity[]; interestAccrued: number }) {
   const [tab, setTab] = useState("payments");

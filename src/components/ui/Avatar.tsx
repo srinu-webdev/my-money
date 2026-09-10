@@ -1,4 +1,4 @@
-import { avatarGradient, initials } from "@/lib/format";
+import { avatarStyle, initials } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 const SIZES = {
@@ -14,10 +14,7 @@ export function Avatar({ name, size = "md", src, className }: { name: string; si
     return <img src={src} alt={name} className={cn("rounded-full object-cover shrink-0", SIZES[size], className)} />;
   }
   return (
-    <span
-      className={cn("inline-flex items-center justify-center rounded-full font-bold text-white shrink-0", SIZES[size], className)}
-      style={{ background: avatarGradient(name) }}
-    >
+    <span className={cn("inline-flex items-center justify-center rounded-full font-bold shrink-0", SIZES[size], className)} style={avatarStyle(name)}>
       {initials(name)}
     </span>
   );

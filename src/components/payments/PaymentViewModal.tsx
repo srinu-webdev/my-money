@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
-import { Edit, Printer, Trash2 } from "lucide-react";
+import { Edit, Printer, Trash } from "@/components/ui/icons";
 import { useModal } from "@/components/providers/ModalProvider";
 import { ModalHeader, ModalBody, ModalFooter } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -68,7 +68,7 @@ function PaymentViewContent({ payment }: { payment: Payment }) {
       </ModalBody>
       <ModalFooter between>
         <Button variant="ghost" className="text-danger" onClick={del}>
-          <Trash2 /> Delete
+          <Trash /> Delete
         </Button>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => printReceipt(payment)}>

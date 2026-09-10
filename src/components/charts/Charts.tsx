@@ -118,6 +118,32 @@ export function CountBarChart({ labels, data, color = "info" }: { labels: string
   return <Bar data={{ labels, datasets: [{ data, backgroundColor: c[color], borderRadius: 6, maxBarThickness: 28 }] }} options={baseOptions(c, true)} />;
 }
 
+// Two money series side-by-side per month (not stacked — Money Lent and
+// Interest Collected aren't parts of one whole, they're separate figures
+// worth comparing month to month).
+export function GroupedMoneyBarChart({
+  labels,
+  series,
+}: {
+  labels: string[];
+  series: { label: string; data: number[]; color: "primary" | "purple" | "success" | "info" | "warning" | "danger" }[];
+}) {
+  const c = useChartColors();
+  const opts = baseOptions(c) as ChartOptions<"bar">;
+  return (
+    <Bar
+      data={{ labels, datasets: series.map((s) => ({ label: s.label, data: s.data, backgroundColor: c[s.color], borderRadius: 6, maxBarThickness: 22 })) }}
+      options={{
+        ...opts,
+        plugins: {
+          ...opts.plugins,
+          legend: { display: true, position: "top", align: "end", labels: { color: c.text, boxWidth: 10, usePointStyle: true, font: { family: "Inter", size: 11.5 } } },
+        },
+      }}
+    />
+  );
+}
+
 export function StackedMoneyBarChart({ labels, series }: { labels: string[]; series: { label: string; data: number[]; color: string }[] }) {
   const c = useChartColors();
   const opts = baseOptions(c) as ChartOptions<"bar">;

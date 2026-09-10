@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { FormGroup, Input, Select, Textarea } from "@/components/ui/Field";
 import { createCustomerAction, updateCustomerAction } from "@/lib/actions/customers";
 import type { Customer } from "@/lib/types";
-import { Edit, Plus } from "lucide-react";
+import { Edit, Plus } from "@/components/ui/icons";
 
 export function CustomerFormModal({ customer, onSaved }: { customer?: Customer; onSaved?: (id: string) => void }) {
   const { closeModal } = useModal();

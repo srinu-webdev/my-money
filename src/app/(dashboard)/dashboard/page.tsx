@@ -9,7 +9,7 @@ import { QuickActions } from "@/components/dashboard/QuickActions";
 import { WelcomeToast } from "@/components/dashboard/WelcomeToast";
 import { formatCurrency } from "@/lib/format";
 import { businessHour, businessNow, formatDate } from "@/lib/dates";
-import { Wallet, CreditCard, Percent, Clock, Wallet as WalletIcon, TrendingUp, Calendar, AlertTriangle } from "lucide-react";
+import { HandCoins, Wallet, CreditCard, Percent, Clock, TrendingUp, Calendar, AlertTriangle } from "@/components/ui/icons";
 
 export const metadata = { title: "Dashboard — LendPro" };
 export const dynamic = "force-dynamic";
@@ -45,18 +45,18 @@ export default async function DashboardPage() {
       </Suspense>
       <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">{greeting}, {firstName} 👋</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">{greeting}, {firstName}</h1>
           <p className="text-text-secondary text-[13.5px] mt-0.5">Here is what is happening in your lending business today.</p>
         </div>
         <QuickActions showTopButtons />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        <StatCard label="Total Money Lent" value={formatCurrency(stats.totalMoneyLent)} icon={Wallet} tone="primary" hint={`${stats.activeLoans} active · ${stats.paidLoans} paid loans`} />
+        <StatCard label="Total Money Lent" value={formatCurrency(stats.totalMoneyLent)} icon={HandCoins} tone="primary" hint={`${stats.activeLoans} active · ${stats.paidLoans} paid loans`} />
         <StatCard label="Principal Outstanding" value={formatCurrency(stats.principalOutstanding)} icon={CreditCard} tone="purple" hint="Capital still with borrowers" />
         <StatCard label="Interest Earned" value={formatCurrency(stats.interestEarned)} icon={Percent} tone="success" hint="Accrued to date on all loans" />
         <StatCard label="Interest Pending" value={formatCurrency(stats.interestPending)} icon={Clock} tone="warning" hint="Accrued but not yet collected" />
-        <StatCard label="Total Collected" value={formatCurrency(stats.totalCollected)} icon={WalletIcon} tone="success" hint={`${payments.length} payments recorded`} />
+        <StatCard label="Total Collected" value={formatCurrency(stats.totalCollected)} icon={Wallet} tone="success" hint={`${payments.length} payments recorded`} />
         <StatCard label="Today's Collection" value={formatCurrency(stats.todaysCollection)} icon={TrendingUp} tone="info" hint={formatDate(businessNow())} />
         <StatCard label="Upcoming Due" value={formatCurrency(stats.upcomingDue)} icon={Calendar} tone="warning" hint="Due within the next 7 days" />
         <StatCard label="Overdue Amount" value={formatCurrency(stats.overdueAmount)} icon={AlertTriangle} tone="danger" hint={`${stats.overdueLoans} overdue loan${stats.overdueLoans === 1 ? "" : "s"}`} />
