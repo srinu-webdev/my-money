@@ -16,7 +16,14 @@ export interface TabItem {
 
 export function Tabs({ tabs, active, onChange }: { tabs: TabItem[]; active: string; onChange: (key: string) => void }) {
   return (
-    <div className="flex gap-1 border-b border-border px-[22px] overflow-x-auto">
+    <div
+      className="flex gap-1 border-b border-border px-[22px] overflow-x-auto"
+      // A row of 5-6 tabs doesn't fit a phone width, so this scrolls — but
+      // with no visual cue, a partially-scrolled strip just looks like a
+      // cut-off layout bug (as it was mistaken for). A permanent edge
+      // fade is the standard, JS-free way to signal "there's more here."
+      style={{ maskImage: "linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)" }}
+    >
       {tabs.map((t) => (
         <button
           key={t.key}

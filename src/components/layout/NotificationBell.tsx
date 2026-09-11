@@ -46,7 +46,13 @@ export function NotificationBell({ notifications, unreadCount }: { notifications
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] w-[360px] max-w-[calc(100vw-32px)] bg-surface border border-border rounded-2xl shadow-card-lg overflow-hidden z-[200] animate-fade-in">
+        // On mobile this is `fixed` and clamped to the viewport by margins
+        // instead of anchored to the bell button — the bell isn't the
+        // rightmost element in the header (UserMenu sits after it), so a
+        // button-anchored `right-0` panel wide enough to be useful
+        // overflowed off the LEFT edge of a narrow screen. From `sm:` up
+        // there's enough room for the classic anchored-dropdown look.
+        <div className="fixed inset-x-4 top-[76px] sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+8px)] w-auto sm:w-[360px] sm:max-w-[calc(100vw-32px)] bg-surface border border-border rounded-2xl shadow-card-lg overflow-hidden z-[200] animate-fade-in">
           <div className="flex items-center justify-between px-4 py-3.5 border-b border-border font-bold text-sm">
             <span>Notifications</span>
             <button

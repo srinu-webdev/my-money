@@ -113,16 +113,20 @@ export function CustomerPaymentCalendar({ loans, payments }: { loans: LoanRow[];
         </div>
       ) : null}
 
-      <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1.5">
         {WEEKDAYS.map((w) => (
-          <div key={w} className="text-center text-[11px] font-semibold text-text-tertiary py-1">
-            {w}
+          <div key={w} className="text-center text-[10px] sm:text-[11px] font-semibold text-text-tertiary py-1">
+            {/* Full weekday name only where there's room for it — at
+                7-across on a phone it wraps ("Wed" -> "We\nd") long
+                before it truncates. */}
+            <span className="sm:hidden">{w[0]}</span>
+            <span className="hidden sm:inline">{w}</span>
           </div>
         ))}
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1 sm:gap-1.5">
         {weeks.map((week, wi) => (
-          <div key={wi} className="grid grid-cols-7 gap-1.5">
+          <div key={wi} className="grid grid-cols-7 gap-1 sm:gap-1.5">
             {week.map((d) => {
               const paid = d.paidAmount > 0;
               const missed = !paid && d.expectedLoanIds.length > 0;
@@ -136,7 +140,7 @@ export function CustomerPaymentCalendar({ loans, payments }: { loans: LoanRow[];
                         ? `${formatDate(d.iso)} — payment expected, none recorded`
                         : formatDate(d.iso)
                   }
-                  className={`relative rounded-lg px-1.5 py-1.5 min-h-[52px] text-[11px] border ${
+                  className={`relative rounded-lg px-1 py-1 sm:px-1.5 sm:py-1.5 min-h-[34px] sm:min-h-[52px] text-[10px] sm:text-[11px] border ${
                     !d.inMonth
                       ? "border-transparent opacity-30"
                       : paid
@@ -147,8 +151,13 @@ export function CustomerPaymentCalendar({ loans, payments }: { loans: LoanRow[];
                   } ${d.isToday ? "ring-2 ring-primary ring-offset-1 ring-offset-surface" : ""}`}
                 >
                   <div className={`font-semibold ${d.isToday ? "text-primary" : "text-text-secondary"}`}>{d.date.getDate()}</div>
-                  {paid ? <div className="text-success-dark font-bold leading-tight mt-0.5">{formatCurrency(d.paidAmount)}</div> : null}
-                  {missed ? <div className="text-danger-dark font-semibold leading-tight mt-0.5">Missed</div> : null}
+                  {/* The amount / "Missed" label only fit a 7-column grid
+                      from `sm:` up — below that the cell's own color
+                      (green/red/gray) plus the legend and the `title`
+                      tooltip already carry the meaning, so mobile just
+                      shows the date number. */}
+                  {paid ? <div className="hidden sm:block text-success-dark font-bold leading-tight mt-0.5">{formatCurrency(d.paidAmount)}</div> : null}
+                  {missed ? <div className="hidden sm:block text-danger-dark font-semibold leading-tight mt-0.5">Missed</div> : null}
                 </div>
               );
             })}

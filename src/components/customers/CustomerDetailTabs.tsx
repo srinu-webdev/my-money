@@ -107,11 +107,11 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
               <thead>
                 <tr>
                   <Th>Loan ID</Th>
-                  <Th className="text-right">Principal</Th>
-                  <Th className="text-right">Rate</Th>
-                  <Th>Frequency</Th>
-                  <Th>Due</Th>
-                  <Th className="text-right">Interest Accrued</Th>
+                  <Th className="hidden sm:table-cell text-right">Principal</Th>
+                  <Th className="hidden lg:table-cell text-right">Rate</Th>
+                  <Th className="hidden lg:table-cell">Frequency</Th>
+                  <Th className="hidden md:table-cell">Due</Th>
+                  <Th className="hidden lg:table-cell text-right">Interest Accrued</Th>
                   <Th className="text-right">Outstanding</Th>
                   <Th>Status</Th>
                 </tr>
@@ -124,11 +124,11 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                         {l.id}
                       </Link>
                     </Td>
-                    <Td className="text-right mono-nums font-semibold">{formatCurrency(l.principal)}</Td>
-                    <Td className="text-right mono-nums">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
-                    <Td>{FREQ_LABEL[l.interestFrequency]}</Td>
-                    <Td className="text-text-secondary">{formatDate(l.dueDate)}</Td>
-                    <Td className="text-right mono-nums">{formatCurrency(l.balance.interestAccrued)}</Td>
+                    <Td className="hidden sm:table-cell text-right mono-nums font-semibold">{formatCurrency(l.principal)}</Td>
+                    <Td className="hidden lg:table-cell text-right mono-nums">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
+                    <Td className="hidden lg:table-cell">{FREQ_LABEL[l.interestFrequency]}</Td>
+                    <Td className="hidden md:table-cell text-text-secondary">{formatDate(l.dueDate)}</Td>
+                    <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(l.balance.interestAccrued)}</Td>
                     <Td className="text-right mono-nums font-semibold">{formatCurrency(l.balance.totalOutstanding)}</Td>
                     <Td>
                       <StatusBadge status={l.derivedStatus} />
@@ -148,28 +148,28 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
             <Table>
               <thead>
                 <tr>
-                  <Th>Payment ID</Th>
+                  <Th className="hidden sm:table-cell">Payment ID</Th>
                   <Th>Loan</Th>
                   <Th className="text-right">Amount</Th>
-                  <Th className="text-right">Interest</Th>
-                  <Th className="text-right">Principal</Th>
-                  <Th>Method</Th>
+                  <Th className="hidden lg:table-cell text-right">Interest</Th>
+                  <Th className="hidden lg:table-cell text-right">Principal</Th>
+                  <Th className="hidden md:table-cell">Method</Th>
                   <Th>Date</Th>
                 </tr>
               </thead>
               <tbody>
                 {payments.map((p) => (
                   <tr key={p.id} className="hover:bg-surface-2">
-                    <Td className="font-mono">{p.id}</Td>
+                    <Td className="hidden sm:table-cell font-mono">{p.id}</Td>
                     <Td>
                       <Link href={`/loans/${p.loanId}`} className="text-primary font-mono hover:underline">
                         {p.loanId}
                       </Link>
                     </Td>
                     <Td className="text-right mono-nums font-semibold">{formatCurrency(p.amount)}</Td>
-                    <Td className="text-right mono-nums text-success-dark">{formatCurrency(p.interestAmount)}</Td>
-                    <Td className="text-right mono-nums">{formatCurrency(p.principalAmount)}</Td>
-                    <Td>
+                    <Td className="hidden lg:table-cell text-right mono-nums text-success-dark">{formatCurrency(p.interestAmount)}</Td>
+                    <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(p.principalAmount)}</Td>
+                    <Td className="hidden md:table-cell">
                       <Badge tone="gray" plain>
                         {p.paymentMethod}
                       </Badge>
@@ -193,10 +193,10 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
               <thead>
                 <tr>
                   <Th>Loan</Th>
-                  <Th className="text-right">Principal</Th>
-                  <Th className="text-right">Rate</Th>
-                  <Th className="text-right">Interest Accrued</Th>
-                  <Th className="text-right">Interest Paid</Th>
+                  <Th className="hidden sm:table-cell text-right">Principal</Th>
+                  <Th className="hidden lg:table-cell text-right">Rate</Th>
+                  <Th className="hidden lg:table-cell text-right">Interest Accrued</Th>
+                  <Th className="hidden lg:table-cell text-right">Interest Paid</Th>
                   <Th className="text-right">Interest Pending</Th>
                   <Th>Status</Th>
                 </tr>
@@ -209,9 +209,9 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                         {l.id}
                       </Link>
                     </Td>
-                    <Td className="text-right mono-nums">{formatCurrency(l.balance.principalRemaining)}</Td>
-                    <Td className="text-right mono-nums">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
-                    <Td className="text-right">
+                    <Td className="hidden sm:table-cell text-right mono-nums">{formatCurrency(l.balance.principalRemaining)}</Td>
+                    <Td className="hidden lg:table-cell text-right mono-nums">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
+                    <Td className="hidden lg:table-cell text-right">
                       <span className="inline-flex items-baseline gap-1.5">
                         <span className="mono-nums">{formatCurrency(l.balance.interestAccrued)}</span>
                         {l.balance.interestPendingWhole > 0.01 ? (
@@ -225,7 +225,7 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                         ) : null}
                       </span>
                     </Td>
-                    <Td className="text-right mono-nums text-success-dark">{formatCurrency(l.balance.interestPaid)}</Td>
+                    <Td className="hidden lg:table-cell text-right mono-nums text-success-dark">{formatCurrency(l.balance.interestPaid)}</Td>
                     <Td className={`text-right mono-nums ${l.balance.interestRemaining ? "text-warning-dark" : ""}`}>{formatCurrency(l.balance.interestRemaining)}</Td>
                     <Td>
                       <StatusBadge status={l.derivedStatus} />

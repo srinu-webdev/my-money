@@ -107,14 +107,14 @@ export function InterestTable({ loans, customerNames }: { loans: LoanRow[]; cust
                   <tr>
                     <Th>Customer</Th>
                     <Th>Loan</Th>
-                    <Th className="text-right">Principal</Th>
-                    <Th className="text-right">Rate</Th>
-                    <Th>Frequency</Th>
-                    <Th className="text-right">Per Period</Th>
-                    <Th className="text-right">Interest Accrued</Th>
-                    <Th className="text-right">Interest Paid</Th>
+                    <Th className="hidden sm:table-cell text-right">Principal</Th>
+                    <Th className="hidden lg:table-cell text-right">Rate</Th>
+                    <Th className="hidden lg:table-cell">Frequency</Th>
+                    <Th className="hidden lg:table-cell text-right">Per Period</Th>
+                    <Th className="hidden lg:table-cell text-right">Interest Accrued</Th>
+                    <Th className="hidden lg:table-cell text-right">Interest Paid</Th>
                     <Th className="text-right">Interest Pending</Th>
-                    <Th>Due Date</Th>
+                    <Th className="hidden md:table-cell">Due Date</Th>
                     <Th>Status</Th>
                     <Th />
                   </tr>
@@ -135,17 +135,17 @@ export function InterestTable({ loans, customerNames }: { loans: LoanRow[]; cust
                           {l.id}
                         </Link>
                       </Td>
-                      <Td className="text-right mono-nums">
+                      <Td className="hidden sm:table-cell text-right mono-nums">
                         {formatCurrency(l.balance.principalRemaining)}
                         <div className="text-xs text-text-tertiary">of {formatCurrency(l.principal)}</div>
                       </Td>
-                      <Td className="text-right mono-nums">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
-                      <Td>{FREQ_LABEL[l.interestFrequency]}</Td>
-                      <Td className="text-right mono-nums">{formatCurrency(l.balance.interestPerPeriod)}</Td>
-                      <Td className="text-right mono-nums">{formatCurrency(l.balance.interestAccrued)}</Td>
-                      <Td className="text-right mono-nums text-success-dark">{formatCurrency(l.balance.interestPaid)}</Td>
+                      <Td className="hidden lg:table-cell text-right mono-nums">{l.interestType === "FIXED" ? `${formatCurrency(l.interestRate)} fixed` : `${l.interestRate}%`}</Td>
+                      <Td className="hidden lg:table-cell">{FREQ_LABEL[l.interestFrequency]}</Td>
+                      <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(l.balance.interestPerPeriod)}</Td>
+                      <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(l.balance.interestAccrued)}</Td>
+                      <Td className="hidden lg:table-cell text-right mono-nums text-success-dark">{formatCurrency(l.balance.interestPaid)}</Td>
                       <Td className={`text-right mono-nums ${l.balance.interestRemaining > 0 ? "text-warning-dark font-semibold" : ""}`}>{formatCurrency(l.balance.interestRemaining)}</Td>
-                      <Td className="text-text-secondary">{formatDate(l.dueDate)}</Td>
+                      <Td className="hidden md:table-cell text-text-secondary">{formatDate(l.dueDate)}</Td>
                       <Td>
                         <Badge tone={TONE[status]}>{status}</Badge>
                       </Td>

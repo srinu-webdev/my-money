@@ -3,7 +3,17 @@ import { CaretDown, CaretUp, CaretUpDown } from "@/components/ui/icons";
 import type { ReactNode, TableHTMLAttributes, ThHTMLAttributes } from "react";
 
 export function TableWrap({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("overflow-x-auto", className)}>{children}</div>;
+  return (
+    <div
+      className={cn("overflow-x-auto", className)}
+      // Most of these tables have more columns than fit a phone width, so
+      // this scrolls — the same edge-fade cue as the Tabs strip, so a
+      // horizontally-scrollable table doesn't look like a cut-off bug.
+      style={{ maskImage: "linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)" }}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function Table({ className, ...props }: TableHTMLAttributes<HTMLTableElement>) {
