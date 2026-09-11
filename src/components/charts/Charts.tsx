@@ -14,13 +14,15 @@ import {
   Legend,
   Filler,
   type ChartOptions,
+  type Chart,
+  type TooltipModel,
 } from "chart.js";
 import { Bar, Line, Doughnut } from "react-chartjs-2";
 import { compactINR, formatCurrency } from "@/lib/format";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler);
 
-function useChartColors() {
+export function useChartColors() {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Standard SSR-hydration guard: next-themes' resolvedTheme is unknown on
@@ -42,6 +44,80 @@ function useChartColors() {
   };
 }
 
+// Chart.js's own canvas-drawn tooltip is supposed to flip sides when there's
+// no room, but a point right at the chart's edge (e.g. the last month on a
+// line chart) doesn't reliably trigger that flip — the box gets clipped by
+// the canvas boundary instead of just repositioning. Rendering the tooltip
+// as a real positioned HTML element instead (Chart.js still computes the
+// title/body text via the normal `callbacks`, this just draws it) lets its
+// left position be clamped to the chart's own width, so it can never run
+// off either edge no matter which point is hovered.
+function externalTooltip(c: ReturnType<typeof useChartColors>) {
+  return (ctx: { chart: Chart; tooltip: TooltipModel<"line" | "bar" | "doughnut"> }) => {
+    const { chart, tooltip } = ctx;
+    const parent = chart.canvas.parentNode;
+    if (!(parent instanceof HTMLElement)) return;
+    if (getComputedStyle(parent).position === "static") parent.style.position = "relative";
+    let box = parent.querySelector<HTMLDivElement>(":scope > .cjs-tooltip");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "cjs-tooltip";
+      Object.assign(box.style, {
+        position: "absolute",
+        pointerEvents: "none",
+        zIndex: "30",
+        borderRadius: "10px",
+        padding: "8px 11px",
+        fontFamily: "Inter, sans-serif",
+        fontSize: "12.5px",
+        lineHeight: "1.6",
+        color: "#fff",
+        whiteSpace: "nowrap",
+        boxShadow: "0 8px 24px rgba(0,0,0,.18)",
+        top: "0",
+        left: "0",
+      } satisfies Partial<CSSStyleDeclaration>);
+      parent.appendChild(box);
+    }
+    if (tooltip.opacity === 0) {
+      box.style.opacity = "0";
+      return;
+    }
+    box.style.backgroundColor = c.tooltipBg;
+
+    let html = "";
+    if (tooltip.title?.length) html += `<div style="font-weight:600;margin-bottom:2px">${tooltip.title.join(" ")}</div>`;
+    tooltip.body.forEach((b: { lines: string[] }, i: number) => {
+      // tooltip.labelColors[i].backgroundColor can be a live CanvasGradient
+      // object (the line charts' area-fill), not a CSS-usable string — pull
+      // the plain hex straight from the dataset instead (borderColor is the
+      // line/bar's own solid color; backgroundColor is the fallback for bar
+      // charts, which may itself be an array of per-point colors).
+      const point = tooltip.dataPoints?.[i];
+      const dataset = point ? chart.data.datasets[point.datasetIndex] : undefined;
+      const pick = (v: unknown): string | undefined => (typeof v === "string" ? v : Array.isArray(v) && typeof v[point!.dataIndex] === "string" ? v[point!.dataIndex] : undefined);
+      const color = dataset ? (pick(dataset.borderColor) ?? pick(dataset.backgroundColor)) : undefined;
+      const swatch = color ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color};margin-right:6px"></span>` : "";
+      b.lines.forEach((line: string) => {
+        html += `<div style="display:flex;align-items:center">${swatch}${line}</div>`;
+      });
+    });
+    box.innerHTML = html;
+
+    const boxWidth = box.offsetWidth;
+    const boxHeight = box.offsetHeight;
+    const margin = 6;
+    let left = tooltip.caretX + 12;
+    if (left + boxWidth > chart.width - margin) left = tooltip.caretX - boxWidth - 12;
+    left = Math.max(margin, Math.min(left, chart.width - boxWidth - margin));
+    let top = tooltip.caretY - boxHeight / 2;
+    top = Math.max(margin, Math.min(top, chart.height - boxHeight - margin));
+
+    box.style.transform = `translate(${left}px, ${top}px)`;
+    box.style.opacity = "1";
+  };
+}
+
 // Deliberately untyped return (rather than ChartOptions<"bar" | "line">):
 // Chart.js's per-type option interfaces are structurally close but not
 // assignable to each other once scriptable callbacks are involved, so a
@@ -53,20 +129,12 @@ function baseOptions(c: ReturnType<typeof useChartColors>, count?: boolean): any
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
-    // Chart.js draws the tooltip inside the canvas itself — near the right
-    // edge (e.g. hovering the last month on a line chart) there isn't
-    // always room to flip it fully into view, so it gets clipped by the
-    // canvas boundary instead of just repositioning. A little breathing
-    // room on the right (and top, since a tall tooltip can also clip
-    // upward) gives it somewhere to render without being cut off.
-    layout: { padding: { top: 8, right: 14, bottom: 0, left: 4 } },
+    layout: { padding: { top: 8, right: 4, bottom: 0, left: 4 } },
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: c.tooltipBg,
-        padding: 10,
-        titleFont: { family: "Inter", weight: 600 },
-        bodyFont: { family: "Inter" },
+        enabled: false,
+        external: externalTooltip(c),
         callbacks: { label: (ctx: { formattedValue: string; parsed: { y: number } }) => " " + (count ? ctx.formattedValue : formatCurrency(ctx.parsed.y)) },
       },
     },
@@ -263,6 +331,11 @@ export function StackedMoneyBarChart({ labels, series }: { labels: string[]; ser
   );
 }
 
+// No built-in Chart.js legend here — the caller (LoanPortfolio) renders its
+// own HTML legend next to a dedicated square canvas box instead, so the
+// "N Total Loans" center overlay can sit at that box's exact center on any
+// screen size, rather than guessing how much width Chart.js's own legend
+// would take up.
 export function LoanStatusDoughnut({ labels, data }: { labels: string[]; data: number[] }) {
   const c = useChartColors();
   return (
@@ -273,8 +346,8 @@ export function LoanStatusDoughnut({ labels, data }: { labels: string[]; data: n
         maintainAspectRatio: false,
         cutout: "68%",
         plugins: {
-          legend: { position: "right", labels: { color: c.text, usePointStyle: true, boxWidth: 8, font: { family: "Inter", size: 11.5 }, padding: 14 } },
-          tooltip: { backgroundColor: c.tooltipBg, callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.formattedValue} loans` } },
+          legend: { display: false },
+          tooltip: { enabled: false, external: externalTooltip(c), callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.formattedValue} loans` } },
         },
       }}
     />

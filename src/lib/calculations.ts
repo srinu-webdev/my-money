@@ -745,7 +745,13 @@ export function getDashboardStats(loans: Loan[], payments: Payment[], customerCo
     s.interestEarned += b.interestAccrued;
     s.interestPending += b.interestRemaining;
     if (st === "OVERDUE") {
-      s.overdueAmount += b.totalOutstanding;
+      // What's actually "overdue" depends on WHY this loan is flagged that
+      // way (mirrors getLoanStatus's own check order): once the loan's own
+      // final due date has passed, the whole remaining balance — principal
+      // included — is now due, not just interest. Before that, the loan's
+      // term itself isn't up yet; only a missed periodic interest cycle is
+      // late, so the principal isn't part of what's overdue.
+      s.overdueAmount += parseDate(loan.dueDate) < t0 ? b.totalOutstanding : b.interestPendingWhole;
       s.overdueLoans++;
     } else if (st === "PAID") {
       s.paidLoans++;

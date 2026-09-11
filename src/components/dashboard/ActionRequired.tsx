@@ -59,7 +59,7 @@ export function ActionRequired({
       ) : (
         <div className="divide-y divide-border">
           {overdueLoans > 0 && (
-            <Row icon={AlertTriangle} tone="danger" title="Loans overdue" primary={String(overdueLoans)} secondary={`${formatCurrency(overdueAmount)} outstanding`} href="/overdue" cta="View loans" />
+            <Row icon={AlertTriangle} tone="danger" title="Loans overdue" primary={String(overdueLoans)} secondary={`${formatCurrency(overdueAmount)} overdue`} href="/overdue" cta="View loans" />
           )}
           {upcomingDueLoans > 0 && (
             <Row icon={Clock} tone="warning" title="Due within 7 days" primary={String(upcomingDueLoans)} secondary={`${formatCurrency(upcomingDue)} expected`} href="/due-payments" cta="View due payments" />

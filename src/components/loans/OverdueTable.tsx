@@ -44,7 +44,12 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
     return c;
   }, [overdue]);
 
-  const totalOutstanding = overdue.reduce((s, l) => s + l.balance.totalOutstanding, 0);
+  // What's actually overdue depends on WHY a loan is flagged that way: once
+  // its own final due date has passed, the whole remaining balance —
+  // principal included — is now due. Before that, the loan's term itself
+  // isn't up yet; only a missed periodic interest cycle is late, so the
+  // principal isn't part of what's overdue.
+  const totalOverdueAmount = overdue.reduce((s, l) => s + (l.dueDate < businessToday() ? l.balance.totalOutstanding : l.balance.interestPendingWhole), 0);
 
   const filtered = useMemo(() => {
     let list = overdue;
@@ -95,7 +100,7 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard label="Overdue Loans" value={counts.all} icon={AlertTriangle} tone="danger" />
-        <StatCard label="Overdue Amount" value={formatCurrency(totalOutstanding)} icon={AlertTriangle} tone="danger" hint="Principal + pending interest" />
+        <StatCard label="Overdue Amount" value={formatCurrency(totalOverdueAmount)} icon={AlertTriangle} tone="danger" hint="Pending interest, or full balance once a loan's term ends" />
         <StatCard label="1–30 Days" value={counts["1-7"] + counts["8-30"]} icon={AlertTriangle} tone="warning" hint="Early stage" />
         <StatCard label="30+ Days" value={counts["31-90"] + counts["90+"]} icon={AlertTriangle} tone="danger" hint="Needs escalation" />
       </div>

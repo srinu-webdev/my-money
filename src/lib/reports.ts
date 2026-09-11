@@ -104,7 +104,13 @@ export function computeReport(loans: Loan[], payments: Payment[], customers: Cus
     interestPending += bal.interestRemaining;
     principalOutstanding += bal.principalRemaining;
     if (st === "OVERDUE") {
-      overdue += bal.totalOutstanding;
+      // What's actually overdue depends on WHY this loan is flagged that
+      // way (mirrors getLoanStatus's own check order): once the loan's own
+      // final due date has passed, the whole remaining balance — principal
+      // included — is now due. Before that, the loan's term itself isn't
+      // up yet; only a missed periodic interest cycle is late, so the
+      // principal isn't part of what's overdue.
+      overdue += parseDate(l.dueDate) < businessNow() ? bal.totalOutstanding : bal.interestPendingWhole;
       overdueCount++;
     }
   }

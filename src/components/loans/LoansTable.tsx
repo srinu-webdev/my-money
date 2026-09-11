@@ -187,32 +187,28 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                       <Td className="hidden md:table-cell">{FREQ_LABEL[l.interestFrequency]}</Td>
                       <Td className="hidden md:table-cell text-text-secondary">{formatDate(l.startDate)}</Td>
                       <Td className="hidden lg:table-cell text-right">
-                        {/* Everything stays on ONE line so every row is the same height —
-                            a second line here made rows with a due date taller than the rest. */}
-                        <span className="inline-flex items-baseline gap-1.5">
-                          <span className="mono-nums">{formatCurrency(b.interestPerPeriod)}</span>
-                          {b.interestPendingWhole > 0.01 ? (
-                            <span className="text-xs font-normal text-warning-dark">
-                              {/* interestPerPeriod is on the current outstanding principal — 0 once
-                                  it's fully repaid, even if an older interest cycle is still unpaid.
-                                  No rate basis left to recover a real month count from then. */}
-                              · {b.interestPerPeriod <= 0
-                                ? "Overdue – Interest Pending"
-                                : Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1
-                                  ? "Overdue – This Month Interest"
-                                  : `Overdue – Last ${Math.round(b.interestPendingWhole / b.interestPerPeriod)} Months Interest`}{" "}
-                              ({formatCurrency(b.interestPendingWhole)})
-                            </span>
-                          ) : b.interestPendingWholeRaw > 0.01 ? (
-                            // A just-completed period is genuinely unpaid but still inside
-                            // its 5-day grace window — showing nextMonthlyCollectionDate here
-                            // would jump straight to NEXT month, silently hiding that this
-                            // period's own payment (due on currentPeriodStart) hasn't come in.
-                            <span className="text-xs font-normal text-warning-dark">· Due {formatDate(b.currentPeriodStart)}</span>
-                          ) : b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
-                            <span className="text-xs font-normal text-text-tertiary">· Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</span>
-                          ) : null}
-                        </span>
+                        <div className="mono-nums">{formatCurrency(b.interestPerPeriod)}</div>
+                        {b.interestPendingWhole > 0.01 ? (
+                          <div className="text-xs font-normal text-warning-dark mt-0.5">
+                            {/* interestPerPeriod is on the current outstanding principal — 0 once
+                                it's fully repaid, even if an older interest cycle is still unpaid.
+                                No rate basis left to recover a real month count from then. */}
+                            {b.interestPerPeriod <= 0
+                              ? "Overdue – Interest Pending"
+                              : Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1
+                                ? "Overdue – This Month Interest"
+                                : `Overdue – Last ${Math.round(b.interestPendingWhole / b.interestPerPeriod)} Months Interest`}{" "}
+                            ({formatCurrency(b.interestPendingWhole)})
+                          </div>
+                        ) : b.interestPendingWholeRaw > 0.01 ? (
+                          // A just-completed period is genuinely unpaid but still inside
+                          // its 5-day grace window — showing nextMonthlyCollectionDate here
+                          // would jump straight to NEXT month, silently hiding that this
+                          // period's own payment (due on currentPeriodStart) hasn't come in.
+                          <div className="text-xs font-normal text-warning-dark mt-0.5">Due {formatDate(b.currentPeriodStart)}</div>
+                        ) : b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
+                          <div className="text-xs font-normal text-text-tertiary mt-0.5">Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
+                        ) : null}
                       </Td>
                       <Td className={`hidden lg:table-cell text-right mono-nums ${b.interestPaidThisPeriod >= b.interestPerPeriod && b.interestPerPeriod > 0 ? "text-success-dark font-semibold" : "text-success-dark"}`}>
                         {formatCurrency(b.interestPaidThisPeriod)}
@@ -220,10 +216,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                       <Td className="hidden lg:table-cell text-right mono-nums text-success-dark">{formatCurrency(b.principalPaid)}</Td>
                       <Td className={`text-right mono-nums font-semibold ${b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
                       <Td>
-                        <span className="inline-flex items-center gap-2">
-                          <StatusBadge status={l.derivedStatus} />
-                          {b.daysOverdue ? <span className="text-xs font-normal text-danger">{b.daysOverdue}d · due {formatDate(b.daysOverdueSince)}</span> : null}
-                        </span>
+                        <StatusBadge status={l.derivedStatus} />
                       </Td>
                       <Td>
                         <Dropdown

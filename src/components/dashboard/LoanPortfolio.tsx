@@ -1,6 +1,10 @@
+"use client";
+
 import { Card, CardHeader } from "@/components/ui/Card";
-import { LoanStatusDoughnut } from "@/components/charts/Charts";
+import { LoanStatusDoughnut, useChartColors } from "@/components/charts/Charts";
 import { formatCurrency } from "@/lib/format";
+
+const SEGMENTS = ["Active", "Partially Paid", "Paid", "Overdue"] as const;
 
 export function LoanPortfolio({
   className,
@@ -21,17 +25,42 @@ export function LoanPortfolio({
 }) {
   const total = active + partiallyPaid + paid + overdue;
   const overduePct = totalPortfolioValue > 0 ? (overdueAmount / totalPortfolioValue) * 100 : 0;
+  const c = useChartColors();
+  const counts = [active, partiallyPaid, paid, overdue];
+  const colors = [c.primary, c.info, c.success, c.danger];
 
   return (
     <Card className={className}>
       <CardHeader title="Loan Portfolio" sub="Status breakdown across all loans" />
       <div className="p-4">
         {total > 0 ? (
-          <div className="relative h-[200px]">
-            <LoanStatusDoughnut labels={["Active", "Partially Paid", "Paid", "Overdue"]} data={[active, partiallyPaid, paid, overdue]} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ right: "38%" }}>
-              <div className="text-[22px] font-extrabold tracking-tight mono-nums">{total.toLocaleString("en-IN")}</div>
-              <div className="text-[11px] text-text-tertiary font-medium">Total Loans</div>
+          // The ring sits in its own square box, with nothing else sharing
+          // it — the "N Total Loans" overlay can then just center on that
+          // box directly (no guessed offset for a legend's width, which
+          // would drift out of alignment at other screen sizes). The
+          // legend itself is a plain HTML list beside it instead of
+          // Chart.js's built-in one, which is what needed that guess.
+          <div className="flex items-center gap-5 flex-wrap">
+            <div className="relative w-[168px] h-[168px] shrink-0 mx-auto sm:mx-0">
+              <LoanStatusDoughnut labels={[...SEGMENTS]} data={counts} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="text-[22px] font-extrabold tracking-tight mono-nums">{total.toLocaleString("en-IN")}</div>
+                <div className="text-[11px] text-text-tertiary font-medium">Total Loans</div>
+              </div>
+            </div>
+            {/* min-w-0 lets this shrink and wrap its label text within a
+                narrow card instead of holding its content's full natural
+                width and getting silently clipped by the card's rounded
+                corners — the bug that "flex-nowrap sm:..." had at exactly
+                the width where the 2-column dashboard grid is active but a
+                single card is still fairly narrow. */}
+            <div className="flex flex-col gap-2.5 text-[12.5px] font-medium min-w-0">
+              {SEGMENTS.map((label, i) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colors[i] }} />
+                  <span className="text-text-secondary">{label}</span>
+                </div>
+              ))}
             </div>
           </div>
         ) : (
