@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { LoanStatus } from "@/lib/types";
 import { STATUS_LABEL } from "@/lib/calculations";
 
@@ -14,9 +14,9 @@ const TONES: Record<Tone, string> = {
   gray: "bg-surface-3 text-text-secondary",
 };
 
-export function Badge({ tone = "gray", plain, children, className }: { tone?: Tone; plain?: boolean; children: ReactNode; className?: string }) {
+export function Badge({ tone = "gray", plain, children, className, style }: { tone?: Tone; plain?: boolean; children: ReactNode; className?: string; style?: CSSProperties }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap leading-relaxed", TONES[tone], className)}>
+    <span style={style} className={cn("inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap leading-relaxed", TONES[tone], className)}>
       {!plain && <span className="w-1.5 h-1.5 rounded-full bg-current opacity-85" />}
       {children}
     </span>

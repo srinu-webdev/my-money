@@ -253,6 +253,98 @@ export function calculateInterestForLoan(
   return calculateInterestBreakdown(loan, asOfDate, payments, disbursements).total;
 }
 
+export interface StrictCycleGap {
+  /** Total interest still unmatched under strict per-cycle rules — 0 if every completed cycle has its own qualifying payment. */
+  amount: number;
+  /** The end date of the EARLIEST completed cycle without a qualifying payment, or null if there's no gap. */
+  sinceDate: string | null;
+}
+
+type PaymentLikeInterest = Pick<Payment, "paymentDate" | "interestAmount" | "principalAmount">;
+
+// MONTHLY-only, by explicit request: each recurring monthly cycle must be
+// settled by its OWN payment(s), dated on or after that cycle's own end
+// date — a payment made DURING a cycle (before it ends) can't be credited
+// to it, only to whichever cycle(s) it has actually reached by its date.
+// This is a genuinely different rule from the interestPendingWhole/
+// interestRemaining/interestAccrued math elsewhere in this file, which
+// track a plain running total (how much is owed vs how much has ever come
+// in) and are untouched by this — this function exists ONLY to answer "is
+// there a specific past cycle nobody has actually paid for," for Overdue
+// classification, not to change how much money the loan shows as owed.
+//
+// Each cycle's own cost is the INCREMENTAL accrual between consecutive
+// boundaries, taken from calculateInterestBreakdown itself (not re-derived
+// here) so a mid-loan principal repayment or disbursement tranche that
+// changes the balance is still accounted for correctly. Payments are
+// matched oldest-cycle-first, greedily, from whichever qualifying (date >=
+// that cycle's end) payment is earliest — a payment's leftover after
+// settling one cycle can still apply to a later one, but only if its own
+// date also reaches that later cycle's end.
+export function strictCycleGap(
+  loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt">,
+  asOfDate: string | Date,
+  payments: PaymentLikeInterest[],
+  disbursements?: DisbursementLike[]
+): StrictCycleGap {
+  if (loan.interestFrequency !== "MONTHLY") return { amount: 0, sinceDate: null };
+  const asOf = startOfDay(asOfDate);
+  const anchorDay = parseDate(loan.startDate).getDate();
+  const firstEventDate = effectiveDisbursements(loan, disbursements).reduce(
+    (min, d) => (startOfDay(d.date) < min ? startOfDay(d.date) : min),
+    startOfDay(loan.startDate)
+  );
+
+  // Every completed cycle's own end date, oldest first — mirrors
+  // monthlyPeriodInfo's boundary walk above so the two never disagree.
+  const boundaries: Date[] = [];
+  const startY = firstEventDate.getFullYear();
+  const startM = firstEventDate.getMonth();
+  for (let i = 0; i <= 1200; i++) {
+    const y = startY;
+    const m = startM + i;
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const candidate = new Date(y, m, Math.min(anchorDay, daysInMonth));
+    if (candidate <= firstEventDate) continue;
+    if (candidate > asOf) break;
+    boundaries.push(candidate);
+  }
+  if (!boundaries.length) return { amount: 0, sinceDate: null };
+
+  let prevWhole = 0;
+  const cycles = boundaries.map((end) => {
+    const whole = calculateInterestBreakdown(loan, end, payments, disbursements).whole;
+    const cost = round2(whole - prevWhole);
+    prevWhole = whole;
+    return { end, cost };
+  });
+
+  const pool = payments
+    .map((p) => ({ date: startOfDay(p.paymentDate), remaining: round2(Number(p.interestAmount) || 0) }))
+    .filter((p) => p.remaining > 0.01)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  let totalGap = 0;
+  let sinceDate: string | null = null;
+  for (const cycle of cycles) {
+    if (cycle.cost <= 0.01) continue;
+    let covered = 0;
+    for (const p of pool) {
+      if (covered >= cycle.cost - 0.01) break;
+      if (p.remaining <= 0.01 || p.date < cycle.end) continue;
+      const take = Math.min(p.remaining, round2(cycle.cost - covered));
+      covered = round2(covered + take);
+      p.remaining = round2(p.remaining - take);
+    }
+    const shortfall = round2(cycle.cost - covered);
+    if (shortfall > 0.01) {
+      totalGap = round2(totalGap + shortfall);
+      if (!sinceDate) sinceDate = toISODate(cycle.end);
+    }
+  }
+  return { amount: totalGap, sinceDate };
+}
+
 export function interestPerPeriod(
   loan: Pick<Loan, "interestRate" | "interestType">,
   principal: number
@@ -290,16 +382,17 @@ export function nextMonthlyCollectionDate(startDateIso: string, asOfDate?: strin
 }
 
 // A completed monthly period's interest is genuinely owed from the moment
-// its due date arrives — that's real accrual and isn't touched here. But
-// the lender doesn't consider a payment actually *late* the instant the
-// due date starts; in practice there's a few days' grace before it reads
-// as "pending"/overdue rather than merely "due today". This only affects
-// interestPendingWhole (the "N whole months genuinely pending" flag used
-// for status and "X months pending" displays everywhere) — interestAccrued
-// / interestRemaining / totalOutstanding keep accruing exactly as before,
-// so the amount owed is never understated during the grace window, only
-// the "this is now delinquent" label is held back briefly.
-const MONTHLY_INTEREST_GRACE_DAYS = 5;
+// its due date arrives — that's real accrual and isn't touched here. A
+// grace period (days past that due date before it counts as genuinely
+// "pending"/overdue) was tried at 5 days and then explicitly removed —
+// the lender wants a period flagged the day after it's due, no leeway.
+// Kept as a named constant rather than inlining `> 0` so the exact
+// business rule stays a single, clearly-labeled place to change again.
+// This only affects interestPendingWhole (the "N whole months pending"
+// flag used for status and "X months pending" displays everywhere) —
+// interestAccrued / interestRemaining / totalOutstanding keep accruing
+// exactly as before regardless of this value.
+const MONTHLY_INTEREST_GRACE_DAYS = 0;
 
 export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?: string | Date, disbursements?: Disbursement[]): LoanBalance {
   const today = startOfDay(asOfDate ?? businessNow());
@@ -314,11 +407,19 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
   const breakdown = calculateInterestBreakdown(loan, today, payments, disbursements);
   const interestAccrued = breakdown.total;
   const interestRemaining = Math.max(0, round2(interestAccrued - interestPaid));
-  // Payments are assumed to settle the oldest debt first (completed
-  // periods before today's still-growing partial one) — the natural,
-  // sensible order, and matches how interest allocation already works.
-  const rawInterestPendingWhole = Math.max(0, round2(breakdown.whole - interestPaid));
-  const daysSincePeriodEnded = rawInterestPendingWhole > 0.01 ? daysBetween(breakdown.currentPeriodStart, today) : 0;
+  // For MONTHLY loans, whether a specific recurring cycle counts as "paid"
+  // uses strict per-cycle matching (see strictCycleGap) — a payment made
+  // DURING a cycle can't be credited to it, only to whichever cycle(s) its
+  // own date has actually reached. Other frequencies keep the simpler
+  // running-total comparison (whole periods accrued vs lifetime paid).
+  // Either way this is purely a CLASSIFICATION signal — interestAccrued /
+  // interestRemaining / totalOutstanding above are untouched, so the real
+  // rupee amount owed is never affected by which rule decided "overdue."
+  const isMonthly = loan.interestFrequency === "MONTHLY";
+  const strictGap = isMonthly ? strictCycleGap(loan, today, payments, disbursements) : null;
+  const rawInterestPendingWhole = strictGap ? strictGap.amount : Math.max(0, round2(breakdown.whole - interestPaid));
+  const pendingSinceDate = strictGap ? strictGap.sinceDate : rawInterestPendingWhole > 0.01 ? breakdown.currentPeriodStart : null;
+  const daysSincePeriodEnded = pendingSinceDate ? daysBetween(pendingSinceDate, today) : 0;
   const interestPendingWhole = daysSincePeriodEnded > MONTHLY_INTEREST_GRACE_DAYS ? rawInterestPendingWhole : 0;
   // "This month" = the period currently running (strictly after
   // currentPeriodStart, up to today) — separate from the loan's lifetime
@@ -332,6 +433,18 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
     (a, b) => parseDate(b.paymentDate).getTime() - parseDate(a.paymentDate).getTime()
   );
   const due = parseDate(loan.dueDate);
+  // Overdue on the final due date takes priority; otherwise, if a whole
+  // completed interest period is still unpaid, "overdue" means overdue
+  // since that period's own boundary (breakdown.currentPeriodStart is
+  // exactly when it ended), not the loan's far-off final due date.
+  const overdueOnFinalDueDate = due && due < today && totalOutstanding > 0;
+  const daysOverdue = overdueOnFinalDueDate ? daysBetween(due, today) : interestPendingWhole > 0.01 ? daysSincePeriodEnded : 0;
+  // The date daysOverdue is actually counted FROM — paired with it so a
+  // UI never shows "Nd overdue" next to the wrong date. A UI that instead
+  // reached for loan.dueDate directly (the far-off final maturity date)
+  // showed a bizarre "1d overdue, due next month" once a loan could go
+  // Overdue from an unpaid interest period alone, not just its own due date.
+  const daysOverdueSince: string | null = overdueOnFinalDueDate ? loan.dueDate : interestPendingWhole > 0.01 ? pendingSinceDate : null;
   return {
     principal,
     principalPaid,
@@ -345,15 +458,19 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
     lastPaymentDate: sorted[0]?.paymentDate ?? null,
     lastPaymentAmount: sorted[0]?.amount ?? 0,
     daysActive: Math.max(0, daysBetween(loan.startDate, today)),
-    // Overdue on the final due date takes priority; otherwise, if a whole
-    // completed interest period is still unpaid, "overdue" means overdue
-    // since that period's own boundary (breakdown.currentPeriodStart is
-    // exactly when it ended), not the loan's far-off final due date.
-    daysOverdue: due && due < today && totalOutstanding > 0 ? daysBetween(due, today) : interestPendingWhole > 0.01 ? daysSincePeriodEnded : 0,
+    daysOverdue,
+    daysOverdueSince,
     interestPerPeriod: interestPerPeriod(loan, principalRemaining),
     totalDisbursed,
     pendingDisbursement,
     interestPendingWhole,
+    interestPendingWholeRaw: rawInterestPendingWhole,
+    // The pending amount's own "since" date when there's a gap (the strict-
+    // matching model's unmatched cycle, or the plain running-total model's
+    // boundary) — falls back to the current running period's start so a UI
+    // that shows this unconditionally (there isn't one today, but exposing
+    // it) still gets something sensible when nothing is pending.
+    currentPeriodStart: pendingSinceDate ?? breakdown.currentPeriodStart,
     interestPaidThisPeriod,
   };
 }

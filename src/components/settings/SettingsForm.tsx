@@ -13,7 +13,7 @@ import { FREQ_LABEL } from "@/lib/calculations";
 import type { InterestFrequency, InterestType, Settings } from "@/lib/types";
 
 const DATE_FORMATS = ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD MMM YYYY"];
-const REPAYMENT_TYPES = ["Interest Only", "Principal + Interest", "Principal First", "Daily Installment", "Custom"];
+const REPAYMENT_TYPES = ["Interest Only", "Daily Installment", "Principal + Interest", "Custom"];
 const PAYMENT_METHODS = ["Cash", "UPI", "Bank Transfer", "Cheque", "Other"];
 
 export function SettingsForm({ settings }: { settings: Settings }) {
@@ -65,7 +65,11 @@ export function SettingsForm({ settings }: { settings: Settings }) {
                   <Input type="email" name="businessEmail" defaultValue={settings.businessEmail} />
                 </FormGroup>
                 <FormGroup label="Business Address" className="sm:col-span-2">
-                  <Textarea name="businessAddress" defaultValue={settings.businessAddress} className="min-h-16" />
+                  {/* Textarea's own base class sets min-h-[84px] — a className
+                      override can't win that fight (`cn()` is plain clsx, no
+                      Tailwind conflict resolution), so the shorter height
+                      needs an inline style, which always takes priority. */}
+                  <Textarea name="businessAddress" defaultValue={settings.businessAddress} style={{ minHeight: "64px" }} />
                 </FormGroup>
                 <FormGroup label="Currency">
                   <Select defaultValue="INR" disabled>

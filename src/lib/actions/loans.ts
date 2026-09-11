@@ -96,7 +96,13 @@ export async function updateLoanAction(id: string, input: unknown): Promise<Acti
         startDate: isoToDbDate(d.startDate),
         dueDate: isoToDbDate(d.dueDate),
         repaymentType: d.repaymentType,
-        collectionDay: d.collectionDay ?? null,
+        // The form no longer exposes a way to set/change this, so the
+        // payload never carries it — preserve whatever's already stored
+        // (e.g. a loan set up with a custom collection day before this
+        // field was removed) instead of silently clearing it on every
+        // unrelated edit. `d.collectionDay` can still win if it's ever
+        // sent from elsewhere in the future.
+        collectionDay: d.collectionDay ?? existing.collectionDay,
         notes: d.notes || null,
         // Editing the terms of a previously-closed loan back into having a
         // balance reopens it — status is re-derived on next read anyway,

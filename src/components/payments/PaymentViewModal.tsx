@@ -67,7 +67,7 @@ function PaymentViewContent({ payment }: { payment: Payment }) {
         </div>
       </ModalBody>
       <ModalFooter between>
-        <Button variant="ghost" className="text-danger" onClick={del}>
+        <Button variant="ghost-danger" onClick={del}>
           <Trash /> Delete
         </Button>
         <div className="flex gap-2">

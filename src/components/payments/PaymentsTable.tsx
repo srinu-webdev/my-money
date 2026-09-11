@@ -115,7 +115,7 @@ export function PaymentsTable({
             />
           </div>
           <Select
-            className="w-auto"
+            className="min-w-[150px] max-w-[190px]"
             value={method}
             onChange={(e) => {
               setMethod(e.target.value);

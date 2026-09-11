@@ -14,13 +14,13 @@ import {
   TrendingUp,
   Bell,
   Settings,
-  UserCircle,
   LogOut,
   ChevronLeft,
   X,
 } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { BrandMark } from "@/components/ui/BrandLogo";
+import { Avatar } from "@/components/ui/Avatar";
 import { logoutAction } from "@/lib/actions/auth";
 
 // Deliberately dark, always — a persistent navy sidebar next to a light
@@ -40,6 +40,8 @@ interface NavItem {
 export function Sidebar({
   dueCount,
   overdueCount,
+  adminName,
+  adminAvatar,
   mobileOpen,
   onCloseMobile,
   collapsed,
@@ -47,6 +49,8 @@ export function Sidebar({
 }: {
   dueCount: number;
   overdueCount: number;
+  adminName: string;
+  adminAvatar: string | null;
   mobileOpen: boolean;
   onCloseMobile: () => void;
   collapsed: boolean;
@@ -71,7 +75,6 @@ export function Sidebar({
     { href: "/notifications", label: "Notifications", icon: Bell },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
-  const account: NavItem[] = [{ href: "/profile", label: "Admin Profile", icon: UserCircle }];
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -145,33 +148,22 @@ export function Sidebar({
           {section("Management", management)}
           {section("Analytics", analytics)}
           {section("System", system)}
-          {section("Account", account)}
-          <button
-            onClick={() => logoutAction()}
-            className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-[10px] font-medium text-[13.5px] w-full text-left text-[#94a3b8] hover:bg-[#1e293b] hover:text-[#f1f5f9] transition-colors",
-              collapsed && "justify-center px-0"
-            )}
-          >
-            <LogOut className="w-[18px] h-[18px] shrink-0" />
-            <span className={collapsed ? "hidden" : ""}>Logout</span>
-          </button>
         </nav>
 
         {!collapsed && (
           <div className="p-3.5 border-t border-[#1e293b] shrink-0">
-            <div className="rounded-[14px] p-4 bg-primary-700 text-white">
-              <TrendingUp className="w-6 h-6 mb-2.5 opacity-90" />
-              <div className="text-[13.5px] font-bold leading-tight">Grow Your Portfolio</div>
-              <div className="text-[11.5px] text-white/75 mt-1 leading-relaxed">Efficient lending. Better returns.</div>
-              <Link
-                href="/reports"
-                className="mt-3 inline-flex items-center justify-center w-full px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-[12.5px] font-semibold transition-colors"
-              >
-                View Reports
+            <div className="flex items-center gap-2.5 rounded-[12px] p-2 hover:bg-[#1e293b] transition-colors">
+              <Link href="/profile" className="flex items-center gap-2.5 min-w-0 flex-1">
+                <Avatar name={adminName} src={adminAvatar} size="sm" />
+                <span className="min-w-0">
+                  <div className="text-[13px] font-semibold text-[#f1f5f9] truncate">{adminName}</div>
+                  <div className="text-[11px] text-[#64748b]">Administrator</div>
+                </span>
               </Link>
+              <button onClick={() => logoutAction()} className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[#64748b] hover:bg-[#0f172a] hover:text-[#f1f5f9] transition-colors" aria-label="Logout">
+                <LogOut className="w-[17px] h-[17px]" />
+              </button>
             </div>
-            <div className="text-[10.5px] text-[#64748b] leading-relaxed mt-3">Record-keeping tool only. Interest calculations and lending practices should comply with applicable local laws.</div>
           </div>
         )}
       </aside>

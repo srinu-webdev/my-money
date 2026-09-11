@@ -98,7 +98,7 @@ export function LoanDetailActions({ loan, paymentsCount, status }: { loan: Loan;
           <RecordPaymentButton loanId={loan.id} />
         </>
       )}
-      <Button variant="ghost" className="text-danger" onClick={handleDelete}>
+      <Button variant="ghost-danger" onClick={handleDelete}>
         <Trash />
       </Button>
     </div>

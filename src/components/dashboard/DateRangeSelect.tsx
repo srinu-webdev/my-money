@@ -24,7 +24,7 @@ export function DateRangeSelect({ value }: { value: ReportRangeKey }) {
     <Select
       value={value}
       onChange={(e) => router.push(`${pathname}?range=${e.target.value}`, { scroll: false })}
-      className="w-auto min-w-[150px] text-[13px] font-semibold"
+      className="min-w-[150px] max-w-[190px] text-[13px] font-semibold"
       aria-label="Date range"
     >
       {OPTIONS.map((o) => (

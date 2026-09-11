@@ -2,7 +2,7 @@ import { cn } from "@/lib/cn";
 import { Spinner } from "@/components/ui/icons";
 import type { ButtonHTMLAttributes } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger" | "success" | "soft";
+type Variant = "primary" | "secondary" | "ghost" | "ghost-danger" | "danger" | "success" | "soft";
 type Size = "sm" | "md" | "lg" | "icon" | "icon-sm";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -15,6 +15,12 @@ const VARIANTS: Record<Variant, string> = {
   primary: "bg-primary-600 text-white shadow-card-sm hover:bg-primary-700",
   secondary: "bg-surface border border-border-strong text-text hover:bg-surface-2 hover:border-text-tertiary",
   ghost: "bg-transparent text-text-secondary hover:bg-surface-3 hover:text-text",
+  // A ghost button for a destructive action (delete icon/link). Its own
+  // variant, not `ghost` + a `text-danger` override — `cn()` here is plain
+  // clsx with no Tailwind conflict resolution, so a caller-passed color
+  // class fighting the variant's own `text-text-secondary` for the same
+  // element would silently lose (confirmed: it did, at 4 call sites).
+  "ghost-danger": "bg-transparent text-danger hover:bg-danger-light hover:text-danger-dark",
   danger: "bg-danger text-white hover:bg-danger-dark",
   success: "bg-success text-white hover:bg-success-dark",
   soft: "bg-primary-50 text-primary-600 hover:bg-primary-100",

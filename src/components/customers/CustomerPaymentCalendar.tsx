@@ -72,12 +72,21 @@ export function CustomerPaymentCalendar({ loans, payments }: { loans: LoanRow[];
       const expectedLoanIds = isPast
         ? dailyLoans.filter((l) => iso >= l.startDate && iso <= loanExpectedThrough(l, todayIso)).map((l) => l.id)
         : [];
+      // `payments` here is the customer's payments across ALL of their
+      // loans, not just this one Daily Installment loan. When a daily
+      // payment is specifically expected today, only a payment on THAT
+      // loan can satisfy it — otherwise a payment the customer happened
+      // to make on a completely different loan the same day would mask a
+      // genuinely missed daily collection (shows green "Paid" when the
+      // daily obligation was never met). No expectation today → fall back
+      // to counting any payment, same as before, purely informational.
+      const relevantPayments = expectedLoanIds.length > 0 ? dayPayments.filter((p) => expectedLoanIds.includes(p.loanId)) : dayPayments;
       return {
         date,
         iso,
         inMonth: isSameMonth(date, base),
         isToday: iso === todayIso,
-        paidAmount: dayPayments.reduce((s, p) => s + p.amount, 0),
+        paidAmount: relevantPayments.reduce((s, p) => s + p.amount, 0),
         expectedLoanIds,
       };
     });

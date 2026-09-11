@@ -41,7 +41,10 @@ function Section({ title, sub, items, tone, icon: Icon, customers }: { title: st
           <Icon className={`w-6 h-6 shrink-0 ${toneText}`} />
           <div>
             <h3 className="text-[15px] font-bold flex items-center gap-2">
-              {title} <Badge tone={tone} plain className="px-2">{items.length}</Badge>
+              {/* Badge's own base class sets px-2.5 — a className override can't
+                  win that (cn() is plain clsx, no Tailwind conflict resolution),
+                  so the tighter count-pill padding needs an inline style. */}
+              {title} <Badge tone={tone} plain style={{ paddingLeft: "8px", paddingRight: "8px" }}>{items.length}</Badge>
             </h3>
             <div className="text-[12.5px] text-text-secondary">{sub}</div>
           </div>

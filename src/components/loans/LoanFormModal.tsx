@@ -7,7 +7,7 @@ import { Plus } from "@/components/ui/icons";
 import { useModal } from "@/components/providers/ModalProvider";
 import { ModalHeader, ModalBody, ModalFooter, FormError } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Checkbox, FormGroup, Input, Select, Textarea } from "@/components/ui/Field";
+import { FormGroup, Input, Select, Textarea } from "@/components/ui/Field";
 import { createLoanAction, updateLoanAction } from "@/lib/actions/loans";
 import { getLoanFormDefaultsAction } from "@/lib/actions/options";
 import type { Customer, InterestFrequency, InterestType, Loan } from "@/lib/types";
@@ -16,14 +16,12 @@ import { formatCurrency } from "@/lib/format";
 import { addMonths, businessNow, daysBetween, formatDate, todayStr, toISODate } from "@/lib/dates";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 
-const REPAYMENT_TYPES = ["Interest Only", "Principal + Interest", "Principal First", "Daily Installment", "Custom"] as const;
+// Purely descriptive — nothing in the interest engine branches on these
+// strings except "Daily Installment" specifically (it switches on a few
+// daily-loan-only UI/filtering paths elsewhere). Order matches how the
+// business actually talks about its own loan types.
+const REPAYMENT_TYPES = ["Interest Only", "Daily Installment", "Principal + Interest", "Custom"] as const;
 const FREQUENCIES: InterestFrequency[] = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"];
-
-function ordinal(day: number): string {
-  if (day % 100 >= 11 && day % 100 <= 13) return `${day}th`;
-  const suffix = ["th", "st", "nd", "rd"][day % 10] ?? "th";
-  return `${day}${suffix}`;
-}
 
 interface Draft {
   customerId?: string;
@@ -68,19 +66,6 @@ function LoanFormContent({
   const [dueDate, setDueDate] = useState(loan?.dueDate ?? draft?.dueDate ?? toISODate(addMonths(businessNow(), 6)));
   const [repaymentType, setRepaymentType] = useState(loan?.repaymentType ?? draft?.repaymentType ?? defaults.defaultRepaymentType);
   const [totalTarget, setTotalTarget] = useState("");
-  // Most loans hand over the full agreed amount on day one — this stays
-  // unchecked (the default) for that common case. Uncheck it only when
-  // the money is actually being given in tranches (e.g. ₹50,000 now of a
-  // ₹1,00,000 agreement); the rest is added later from the loan detail
-  // page's "Add Disbursement" button, and interest correctly accrues only
-  // on what's been handed over so far — never on the full agreed amount.
-  const [partialDisbursement, setPartialDisbursement] = useState(false);
-  const [initialDisbursement, setInitialDisbursement] = useState("");
-  // Blank = collect on the same day-of-month the loan started (the
-  // common case). Set this only when the real collection day differs —
-  // e.g. always the 15th of every month regardless of when each loan
-  // happened to be disbursed.
-  const [collectionDay, setCollectionDay] = useState(String(loan?.collectionDay ?? ""));
 
   const freqWord = FREQ_NOUN[interestFrequency];
 
@@ -130,9 +115,7 @@ function LoanFormContent({
       case "Interest Only":
         return `Interest Only: collect ${per} every ${freqWord} from this customer. The full principal (${prin}) stays outstanding until you record a principal payment or close the loan.`;
       case "Principal + Interest":
-        return `Principal + Interest: right now the interest due each ${freqWord} is ${per} — that's calculated on THIS loan's outstanding balance, so it will fall as principal is repaid, and it won't match a different loan with a different rate or balance.`;
-      case "Principal First":
-        return `Principal First: interest of ${per} still accrues every ${freqWord} in the background, but guide the customer to pay down the ${prin} principal before interest.`;
+        return `Principal + Interest: both the ${prin} principal and the interest accrued along the way (${per} per ${freqWord} on the current balance) are collected together, typically in one settlement at the end — not paid off periodically like Interest Only.`;
       case "Daily Installment": {
         if (preview.days <= 0) return "Daily Installment: set a due date after the start date to calculate the daily amount.";
         const dailyAmount = preview.total / preview.days;
@@ -146,10 +129,16 @@ function LoanFormContent({
   function openAddCustomer() {
     openModal(
       <CustomerFormModal
-        onSaved={(id) => {
+        onSaved={async (id) => {
           setCustomerId(id);
+          // Re-fetch rather than reuse the `customers` closed over from
+          // when this form first opened — that array predates the customer
+          // just created, so the reopened <Select> would have `customerId`
+          // pointed at an id with no matching <option>, rendering blank
+          // even though the right customer is technically "selected".
+          const { customers: freshCustomers } = await getLoanFormDefaultsAction();
           openModal(
-            <LoanFormContent loan={loan} paymentsCount={paymentsCount} customers={customers} defaults={defaults} draft={{ customerId: id, principal, interestRate, interestType, interestFrequency, startDate, dueDate }} />,
+            <LoanFormContent loan={loan} paymentsCount={paymentsCount} customers={freshCustomers} defaults={defaults} draft={{ customerId: id, principal, interestRate, interestType, interestFrequency, startDate, dueDate }} />,
             { size: "lg" }
           );
         }}
@@ -170,8 +159,6 @@ function LoanFormContent({
       dueDate,
       repaymentType: String(formData.get("repaymentType")),
       notes: String(formData.get("notes") || ""),
-      ...(!editing && partialDisbursement ? { initialDisbursement: Number(initialDisbursement) || 0 } : {}),
-      ...(collectionDay.trim() ? { collectionDay: Number(collectionDay) } : {}),
     };
     startTransition(async () => {
       if (editing) {
@@ -223,23 +210,6 @@ function LoanFormContent({
           <FormGroup label="Loan Amount (₹)" required>
             <Input type="number" name="principal" min={1} step="1" value={principal} onChange={(e) => setPrincipal(e.target.value)} placeholder="1,00,000" />
           </FormGroup>
-          {!editing ? (
-            <FormGroup label=" " className="flex items-end pb-2">
-              <Checkbox label="Only part of this amount is being given today" checked={partialDisbursement} onChange={(e) => setPartialDisbursement(e.target.checked)} />
-            </FormGroup>
-          ) : (
-            <div />
-          )}
-          {!editing && partialDisbursement ? (
-            <FormGroup
-              label="Amount Given Now (₹)"
-              className="sm:col-span-2"
-              required
-              hint={`The remaining ${formatCurrency(Math.max(0, (Number(principal) || 0) - (Number(initialDisbursement) || 0)))} can be added later from the loan page once it's actually handed over — interest won't accrue on it until then.`}
-            >
-              <Input type="number" min={0} max={Number(principal) || undefined} step="1" value={initialDisbursement} onChange={(e) => setInitialDisbursement(e.target.value)} placeholder={`e.g. ${Math.round((Number(principal) || 0) / 2)}`} autoFocus />
-            </FormGroup>
-          ) : null}
           <FormGroup label="Interest Rate Type">
             <Select value={interestType} onChange={(e) => setInterestType(e.target.value as InterestType)}>
               <option value="PERCENTAGE">Percentage (%)</option>
@@ -271,14 +241,6 @@ function LoanFormContent({
           <FormGroup label="Due Date" required>
             <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </FormGroup>
-          {interestFrequency === "MONTHLY" && repaymentType !== "Daily Installment" ? (
-            <FormGroup
-              label="Monthly Collection Day"
-              hint={`Leave blank to collect on the ${startDate ? ordinal(new Date(startDate).getDate()) : "same day"} of every month (this loan's own start day). Set a day only if you actually collect on a different fixed date, e.g. always the 15th.`}
-            >
-              <Input type="number" min={1} max={31} value={collectionDay} onChange={(e) => setCollectionDay(e.target.value)} placeholder="e.g. 15" />
-            </FormGroup>
-          ) : null}
           {repaymentType === "Daily Installment" ? (
             <FormGroup
               label="Total Amount to Collect (₹)"
@@ -317,11 +279,6 @@ function LoanFormContent({
                   Projected interest till due date (if no principal is repaid early): <strong>{formatCurrency(preview.perPeriod * preview.periods)}</strong> · Total payable ≈{" "}
                   <strong>{formatCurrency(preview.total)}</strong>
                 </div>
-                {!editing && partialDisbursement ? (
-                  <div className="text-xs mt-1.5 opacity-80">
-                    This projection assumes the full amount is out from the start date — since only {formatCurrency(Number(initialDisbursement) || 0)} is being given today, actual interest will be lower until the rest is disbursed.
-                  </div>
-                ) : null}
               </>
             ) : (
               "Enter a loan amount to preview interest."

@@ -82,7 +82,7 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
               exportCSV(
                 `lendpro-overdue-${businessToday()}.csv`,
                 ["Customer", "Phone", "Loan ID", "Principal", "Outstanding", "Due Date", "Days Overdue"],
-                overdue.map((l) => [customers.get(l.customerId)?.name ?? "", customers.get(l.customerId)?.phone ?? "", l.id, l.principal, l.balance.totalOutstanding, formatDate(l.dueDate), l.balance.daysOverdue])
+                overdue.map((l) => [customers.get(l.customerId)?.name ?? "", customers.get(l.customerId)?.phone ?? "", l.id, l.principal, l.balance.totalOutstanding, formatDate(l.balance.daysOverdueSince), l.balance.daysOverdue])
               )
             }
           >
@@ -157,9 +157,17 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
                         </Td>
                         <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(l.principal)}</Td>
                         <Td className="hidden lg:table-cell text-right mono-nums">{formatCurrency(l.balance.principalRemaining)}</Td>
-                        <Td className="hidden lg:table-cell text-right mono-nums text-warning-dark">{formatCurrency(l.balance.interestRemaining)}</Td>
+                        {/* The amount actually driving the Overdue flag — a
+                            specific unpaid cycle's own interest, when that's
+                            what put this loan on this page. Falls back to
+                            the full remaining interest for a loan overdue on
+                            its own final due date instead, where there's no
+                            single cycle at fault, the whole balance is. */}
+                        <Td className="hidden lg:table-cell text-right mono-nums text-warning-dark">
+                          {formatCurrency(l.balance.interestPendingWhole > 0.01 ? l.balance.interestPendingWhole : l.balance.interestRemaining)}
+                        </Td>
                         <Td className="text-right mono-nums font-bold text-danger">{formatCurrency(l.balance.totalOutstanding)}</Td>
-                        <Td className="hidden md:table-cell text-danger">{formatDate(l.dueDate)}</Td>
+                        <Td className="hidden md:table-cell text-danger">{formatDate(l.balance.daysOverdueSince)}</Td>
                         <Td className="text-right">
                           <Badge tone={sev(l.balance.daysOverdue)}>
                             {l.balance.daysOverdue} day{l.balance.daysOverdue === 1 ? "" : "s"}

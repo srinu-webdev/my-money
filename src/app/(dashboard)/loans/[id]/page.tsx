@@ -111,7 +111,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         <div className="flex gap-2.5 bg-danger-light text-danger-dark dark:text-red-300 rounded-[10px] px-4 py-3 text-[13px] mb-5">
           <AlertTriangle className="w-[18px] h-[18px] shrink-0 mt-0.5" />
           <span>
-            <strong>Overdue by {balance.daysOverdue} day{balance.daysOverdue === 1 ? "" : "s"}.</strong> Due date was {formatDate(loan.dueDate)}. Outstanding {formatCurrency(balance.totalOutstanding)}.
+            <strong>Overdue by {balance.daysOverdue} day{balance.daysOverdue === 1 ? "" : "s"}.</strong> Due date was {formatDate(balance.daysOverdueSince)}. Outstanding {formatCurrency(balance.totalOutstanding)}.
           </span>
         </div>
       )}
@@ -182,10 +182,25 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           tone={balance.interestRemaining > 0 ? "warning" : "success"}
           hint={
             balance.interestPendingWhole > 0.01
-              ? `${formatCurrency(balance.interestPendingWhole)} in fully-completed period(s), rest still accruing`
-              : balance.interestRemaining > 0.01 && loan.interestFrequency === "MONTHLY"
-                ? `Next due ${formatDate(nextMonthlyCollectionDate(loan.startDate, undefined, loan.collectionDay).date)}`
-                : undefined
+              ? (() => {
+                  // interestPerPeriod is on the CURRENT outstanding principal, so
+                  // it's 0 once the principal is fully repaid — even while an
+                  // older, still-unpaid interest cycle keeps this loan Overdue.
+                  // Dividing by it then would render "Infinity Months"; there's
+                  // no rate basis left to recover a real month count from, so
+                  // just drop the count rather than guess a wrong one.
+                  if (balance.interestPerPeriod <= 0) return `Overdue – Interest Pending (${formatCurrency(balance.interestPendingWhole)}), principal already repaid`;
+                  const months = Math.round(balance.interestPendingWhole / balance.interestPerPeriod);
+                  return `${months === 1 ? "Overdue – This Month Interest" : `Overdue – Last ${months} Months Interest`} (${formatCurrency(balance.interestPendingWhole)}), rest still accruing`;
+                })()
+              : balance.interestPendingWholeRaw > 0.01
+                ? // A just-completed period is unpaid but still inside its grace
+                  // window — say so plainly rather than "Next due" next month,
+                  // which would hide that this period itself hasn't been paid.
+                  `${formatCurrency(balance.interestPendingWholeRaw)} due since ${formatDate(balance.currentPeriodStart)}`
+                : balance.interestRemaining > 0.01 && loan.interestFrequency === "MONTHLY"
+                  ? `Next due ${formatDate(nextMonthlyCollectionDate(loan.startDate, undefined, loan.collectionDay).date)}`
+                  : undefined
           }
         />
         <StatCard label="Principal Paid" value={formatCurrency(balance.principalPaid)} icon={TrendingUp} tone="success" hint={`${paidPct}% repaid`} />

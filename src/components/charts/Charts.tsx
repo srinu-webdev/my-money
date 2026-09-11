@@ -72,7 +72,12 @@ function baseOptions(c: ReturnType<typeof useChartColors>, count?: boolean): any
     },
     scales: {
       x: { grid: { display: false }, ticks: { color: c.text, font: { family: "Inter", size: 11 } }, border: { display: false } },
-      y: { grid: { color: c.grid }, border: { display: false }, ticks: { color: c.text, font: { family: "Inter", size: 11 }, callback: (v: number | string) => (count ? v : compactINR(Number(v))) } },
+      // `grace` pads the auto-computed max above the highest data point —
+      // without it the y-axis max lands exactly AT the peak, and a smoothed
+      // line (tension > 0) can overshoot its own data point at the curve's
+      // apex, clipping flat against the chart's top edge instead of curving
+      // naturally. 12% headroom gives the curve room to round off cleanly.
+      y: { grid: { color: c.grid }, border: { display: false }, grace: "12%", ticks: { color: c.text, font: { family: "Inter", size: 11 }, callback: (v: number | string) => (count ? v : compactINR(Number(v))) } },
     },
   };
 }

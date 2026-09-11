@@ -134,9 +134,22 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
       onConfirm: async () => {
         const res = await bulkDeleteCustomersAction(ids);
         if (!res.ok) return toast.error(res.error);
-        toast.success(res.data.deleted ? `${res.data.deleted} customer(s) deleted${res.data.blocked ? `, ${res.data.blocked} skipped (active loans)` : ""}` : "No customers deleted", {
-          duration: 5000,
-        });
+        // Deleting 0 while nothing was blocked can't actually happen (every
+        // selected id is either deleted or blocked), but the split still
+        // needs to say WHY nothing happened when everything was blocked —
+        // a plain "No customers deleted" toast (previously shown as a
+        // success/green toast, even though nothing was accomplished) left
+        // no way to tell "it silently failed" apart from "it correctly
+        // protected a customer with an active loan," which is exactly what
+        // this is.
+        if (res.data.deleted > 0) {
+          toast.success(`${res.data.deleted} customer(s) deleted${res.data.blocked ? `, ${res.data.blocked} skipped (active loan${res.data.blocked === 1 ? "" : "s"})` : ""}`, { duration: 5000 });
+        } else {
+          toast.error(
+            `No customers deleted — ${res.data.blocked} ${res.data.blocked === 1 ? "has" : "have"} an active loan. Close or transfer the loan${res.data.blocked === 1 ? "" : "s"} first.`,
+            { duration: 6000 }
+          );
+        }
         setSelected(new Set());
         router.refresh();
       },
@@ -167,7 +180,7 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
           />
         </div>
         <Select
-          className="w-auto min-w-[150px]"
+          className="min-w-[150px] max-w-[210px]"
           value={filter}
           onChange={(e) => {
             setFilter(e.target.value as typeof filter);
@@ -180,9 +193,9 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
             </option>
           ))}
         </Select>
-        <Input type="date" className="w-auto" value={from} onChange={(e) => setFrom(e.target.value)} title="Registered from" />
+        <Input type="date" className="max-w-[165px]" value={from} onChange={(e) => setFrom(e.target.value)} title="Registered from" />
         <span className="text-text-tertiary text-sm">to</span>
-        <Input type="date" className="w-auto" value={to} onChange={(e) => setTo(e.target.value)} title="Registered to" />
+        <Input type="date" className="max-w-[165px]" value={to} onChange={(e) => setTo(e.target.value)} title="Registered to" />
         <span className="ml-auto text-text-secondary text-sm">
           {total} customer{total === 1 ? "" : "s"}
         </span>
@@ -257,7 +270,11 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
                     <Td className="hidden sm:table-cell">
                       {c.summary.activeLoans}
                       {c.summary.overdueLoans ? (
-                        <Badge tone="danger" plain className="ml-1.5 px-1.5">
+                        /* Badge's own base class sets px-2.5 — a className override
+                           can't win that (cn() is plain clsx, no Tailwind conflict
+                           resolution), so the tighter pill padding needs an inline
+                           style, which always takes priority. */
+                        <Badge tone="danger" plain className="ml-1.5" style={{ paddingLeft: "6px", paddingRight: "6px" }}>
                           {c.summary.overdueLoans} overdue
                         </Badge>
                       ) : null}

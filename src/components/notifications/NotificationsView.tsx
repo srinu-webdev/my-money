@@ -69,8 +69,7 @@ export function NotificationsView({ notifications }: { notifications: Notificati
             <Check /> Mark all as read
           </Button>
           <Button
-            variant="ghost"
-            className="text-danger"
+            variant="ghost-danger"
             onClick={() =>
               confirm({
                 title: "Clear all notifications?",
@@ -131,8 +130,7 @@ export function NotificationsView({ notifications }: { notifications: Notificati
                     )}
                     <Button
                       size="icon-sm"
-                      variant="ghost"
-                      className="text-danger"
+                      variant="ghost-danger"
                       title="Delete"
                       onClick={() =>
                         startTransition(async () => {

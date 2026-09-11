@@ -49,6 +49,8 @@ export function DashboardShell({
       <Sidebar
         dueCount={dueCount}
         overdueCount={overdueCount}
+        adminName={adminName}
+        adminAvatar={adminAvatar}
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
         collapsed={collapsed}

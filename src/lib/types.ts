@@ -13,7 +13,7 @@ export type LoanStoredStatus = "ACTIVE" | "PAID" | "CANCELLED";
 // Overdue / Partially Paid are derived at read time — never stored.
 export type LoanStatus = LoanStoredStatus | "OVERDUE" | "PARTIALLY_PAID";
 export type PaymentMethod = "Cash" | "UPI" | "Bank Transfer" | "Cheque" | "Other";
-export type RepaymentType = "Interest Only" | "Principal + Interest" | "Principal First" | "Daily Installment" | "Custom";
+export type RepaymentType = "Interest Only" | "Daily Installment" | "Principal + Interest" | "Custom";
 export type AllocationMode = "interest" | "principal" | "interest_principal" | "custom";
 
 export interface Customer {
@@ -139,6 +139,12 @@ export interface LoanBalance {
   lastPaymentAmount: number;
   daysActive: number;
   daysOverdue: number;
+  // The date daysOverdue actually counts from — the loan's own final due
+  // date, OR an unpaid interest period's own boundary, whichever one is
+  // driving daysOverdue. Null when daysOverdue is 0. Always show this
+  // alongside daysOverdue, never loan.dueDate directly — they only agree
+  // when the loan's final due date is what's overdue.
+  daysOverdueSince: string | null;
   interestPerPeriod: number;
   totalDisbursed: number; // sum of disbursement rows — what's actually been handed over so far
   pendingDisbursement: number; // agreed principal not yet disbursed (0 for the common single-handover loan)
@@ -147,6 +153,19 @@ export interface LoanBalance {
   // share, so "N months pending" never counts a period that hasn't
   // actually finished yet (a loan taken 3 days ago shows 0 here).
   interestPendingWhole: number;
+  // The un-gated version of interestPendingWhole — real money owed for a
+  // fully-completed period, even during its 5-day grace window (when
+  // interestPendingWhole itself reads 0 so the loan isn't flagged Overdue
+  // yet). Exists so a UI can tell "genuinely nothing owed yet" apart from
+  // "something's owed but we're not raising the alarm for a few more
+  // days" — those look identical through interestPendingWhole alone.
+  interestPendingWholeRaw: number;
+  // The date the CURRENT period began (= the previous period's own due
+  // date). When interestPendingWholeRaw > 0 this is the real, already-
+  // passed date a payment is owed for — showing nextMonthlyCollectionDate
+  // instead here always looks forward to the FOLLOWING month, silently
+  // skipping over a period that's unpaid right now.
+  currentPeriodStart: string;
   // How much of the CURRENT (still-running) period's interest has been
   // paid so far — a per-cycle figure, separate from `interestPaid`
   // (the loan's lifetime total). `interestPerPeriod` is what's due for

@@ -24,7 +24,12 @@ export default async function DuePaymentsPage() {
     if (loan.derivedStatus === "PAID" || loan.derivedStatus === "CANCELLED") continue;
     if (loan.interestFrequency === "MONTHLY" && loan.repaymentType !== "Daily Installment") {
       const { date: nextDueDate, daysUntil } = nextMonthlyCollectionDate(loan.startDate, t0, loan.collectionDay);
-      if (loan.balance.interestPendingWhole > 0.01 || (daysUntil >= 0 && daysUntil <= 5)) {
+      // interestPendingWholeRaw, not the grace-gated interestPendingWhole —
+      // a period unpaid but still inside its 5-day grace window must still
+      // reach the collection list. nextMonthlyCollectionDate always looks
+      // forward to the FOLLOWING cycle, so daysUntil alone would never
+      // catch it (it'd read as weeks away, not "due since 2 days ago").
+      if (loan.balance.interestPendingWholeRaw > 0.01 || (daysUntil >= 0 && daysUntil <= 5)) {
         monthlyItems.push({ loan, nextDueDate, daysUntil });
       }
     }

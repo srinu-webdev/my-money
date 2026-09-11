@@ -29,7 +29,7 @@ export const loanSchema = z
     interestFrequency: z.enum(["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]),
     startDate: z.string().min(1, "Please enter a valid start date."),
     dueDate: z.string().min(1, "Please enter a valid due date."),
-    repaymentType: z.enum(["Interest Only", "Principal + Interest", "Principal First", "Daily Installment", "Custom"]),
+    repaymentType: z.enum(["Interest Only", "Daily Installment", "Principal + Interest", "Custom"]),
     // Optional: how much is actually being handed over today. Left blank
     // (or equal to principal) means "the full amount, right now" — the
     // common case, unchanged from before this field existed. Set lower

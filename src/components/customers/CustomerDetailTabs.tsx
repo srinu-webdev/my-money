@@ -216,8 +216,20 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                         <span className="mono-nums">{formatCurrency(l.balance.interestAccrued)}</span>
                         {l.balance.interestPendingWhole > 0.01 ? (
                           <span className="text-xs font-normal text-warning-dark">
-                            · {Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod)} month{Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod) === 1 ? "" : "s"} pending
+                            {/* interestPerPeriod is on the current outstanding principal — 0 once
+                                it's fully repaid, even if an older interest cycle is still unpaid.
+                                No rate basis left to recover a real month count from then. */}
+                            · {l.balance.interestPerPeriod <= 0
+                              ? "Overdue – Interest Pending"
+                              : Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod) === 1
+                                ? "Overdue – This Month Interest"
+                                : `Overdue – Last ${Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod)} Months Interest`}
                           </span>
+                        ) : l.balance.interestPendingWholeRaw > 0.01 ? (
+                          // A just-completed period is unpaid but still inside its 5-day
+                          // grace window — show that period's own (already-passed) due
+                          // date, not next month's, which would hide it's unpaid at all.
+                          <span className="text-xs font-normal text-warning-dark">· Due {formatDate(l.balance.currentPeriodStart)}</span>
                         ) : l.balance.interestRemaining > 0.01 && l.interestFrequency === "MONTHLY" ? (
                           <span className="text-xs font-normal text-text-tertiary">· Next due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</span>
                         ) : l.balance.interestAccrued > 0 ? (
