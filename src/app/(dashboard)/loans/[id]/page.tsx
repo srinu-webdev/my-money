@@ -2,13 +2,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "@/components/ui/icons";
 import { getActivitiesFor, getCustomerById, getDisbursementsByLoan, getLoanById, getPaymentsByLoan } from "@/lib/queries";
-import { calculateInterestForLoan, calculateLoanBalance, getLoanSchedule, getLoanStatus, nextMonthlyCollectionDate, FREQ_LABEL, FREQ_NOUN } from "@/lib/calculations";
+import { calculateLoanBalance, dailyInstallmentPlan, getLoanSchedule, getLoanStatus, monthlyInterestSchedule, nextMonthlyCollectionDate, pendingInterestCaption, FREQ_LABEL, FREQ_NOUN } from "@/lib/calculations";
 import { CalendarClock } from "@/components/ui/icons";
-import { StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { formatCurrency } from "@/lib/format";
-import { businessNow, daysBetween, formatDate, formatDateTime } from "@/lib/dates";
+import { businessNow, formatDate, formatDateTime, parseDate } from "@/lib/dates";
 import { Wallet, Percent, CheckCircle, Clock, TrendingUp, CreditCard, AlertTriangle, Info, HandCoins } from "@/components/ui/icons";
 import { LoanDetailTabs } from "@/components/loans/LoanDetailTabs";
 import { LoanDetailActions } from "@/components/loans/LoanDetailActions";
@@ -38,35 +38,19 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   const paidPct = loan.principal ? Math.min(100, Math.round((balance.principalPaid / loan.principal) * 100)) : 0;
   const rateLabel = loan.interestType === "FIXED" ? `${formatCurrency(loan.interestRate)} / ${FREQ_NOUN[loan.interestFrequency]}` : `${loan.interestRate}% ${FREQ_LABEL[loan.interestFrequency]}`;
 
-  // Daily Installment plans quote one fixed collection target set at
-  // origination (principal + the FULL term's projected interest, spread
-  // evenly over every day of the term) — recomputed here from the
-  // original principal (empty payments array) so it matches what the
-  // admin was shown when the loan was created, not today's reduced
-  // balance, matching how real daily-collection loans are actually run.
-  const totalDays = daysBetween(loan.startDate, loan.dueDate);
-  const dailyPlan =
-    loan.repaymentType === "Daily Installment" && totalDays > 0
-      ? (() => {
-          const fullTermInterest = calculateInterestForLoan(loan, loan.dueDate, [], disbursements);
-          const totalPayable = loan.principal + fullTermInterest;
-          const dailyAmount = totalPayable / totalDays;
-          const daysElapsed = Math.min(totalDays, Math.max(0, daysBetween(loan.startDate, businessNow())));
-          const expectedByNow = dailyAmount * daysElapsed;
-          const aheadOrBehind = balance.totalPaid - expectedByNow;
-          // A missed day doesn't just vanish — it rolls forward and stacks
-          // on top of every day after it, so "catch up" is always the full
-          // cumulative gap (every missed day included), never just "yesterday".
-          const catchUpAmount = Math.max(0, -aheadOrBehind);
-          const missedDays = dailyAmount > 0 ? Math.round(catchUpAmount / dailyAmount) : 0;
-          // Projected to the due date at today's actual average daily pace —
-          // answers "will the full amount actually arrive by the due date".
-          const avgDailyPace = daysElapsed > 0 ? balance.totalPaid / daysElapsed : dailyAmount;
-          const projectedTotal = avgDailyPace * totalDays;
-          const projectedShortfall = Math.max(0, totalPayable - projectedTotal);
-          return { dailyAmount, totalDays, totalPayable, daysElapsed, expectedByNow, aheadOrBehind, catchUpAmount, missedDays, projectedTotal, projectedShortfall };
-        })()
-      : null;
+  // Daily Installment plan — shared with the daily reminder notification
+  // (src/app/api/cron/due-reminders/route.ts) so both always agree.
+  const dailyPlan = dailyInstallmentPlan(loan, balance.totalPaid, businessNow(), disbursements);
+
+  // Per-cycle monthly interest schedule (Interest Only / Principal +
+  // Interest, MONTHLY frequency only — returns [] otherwise): each
+  // recurring obligation shown individually as PAID/OVERDUE/DUE/UPCOMING,
+  // rather than just one lump total, so a multi-month arrears situation
+  // ("October overdue, November overdue, December due") is visible
+  // month-by-month, not just as a single combined number.
+  const monthlySchedule = monthlyInterestSchedule(loan, businessNow(), payments, disbursements, 3);
+  const monthLabel = (iso: string) => new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric" }).format(parseDate(iso));
+  const SCHEDULE_TONE = { PAID: "success", OVERDUE: "danger", DUE: "warning", UPCOMING: "gray" } as const;
 
   return (
     <div>
@@ -164,6 +148,42 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           </span>
         </div>
       )}
+      {dailyPlan && status !== "PAID" && status !== "CANCELLED" && (
+        <div className="flex gap-2.5 bg-surface-2 text-text-secondary rounded-[10px] px-4 py-3 text-[13px] mb-5">
+          <CalendarClock className="w-[18px] h-[18px] shrink-0 mt-0.5" />
+          <span>
+            <strong className="text-text">Current required daily payment: {formatCurrency(dailyPlan.requiredDailyNow)}</strong> — recalculated fresh from what&rsquo;s actually left, not the fixed day-one rate above. Remaining amount {formatCurrency(dailyPlan.remainingAmount)} ÷ {dailyPlan.remainingDays} day{dailyPlan.remainingDays === 1 ? "" : "s"} left until {formatDate(loan.dueDate)}.
+          </span>
+        </div>
+      )}
+
+      {monthlySchedule.length > 0 && (
+        <Card className="mb-5">
+          <div className="px-4 sm:px-[22px] py-[18px] border-b border-border">
+            <h3 className="text-[15px] font-bold">Monthly Interest Schedule</h3>
+            <div className="text-[12.5px] text-text-secondary mt-0.5">Each recurring monthly interest cycle, tracked individually — a later month never hides an earlier one still owed.</div>
+          </div>
+          <div className="p-4 sm:p-[22px] flex flex-col gap-2.5">
+            {monthlySchedule.map((cycle) => (
+              <div key={cycle.end} className="flex items-center justify-between gap-3 text-[13.5px]">
+                <span className="font-medium">{monthLabel(cycle.end)}</span>
+                <span className="flex items-center gap-3">
+                  <span className="mono-nums font-semibold">{formatCurrency(cycle.amount)}</span>
+                  <Badge tone={SCHEDULE_TONE[cycle.status]}>{cycle.status}</Badge>
+                </span>
+              </div>
+            ))}
+            {monthlySchedule.some((c) => c.status === "OVERDUE" || c.status === "DUE") && (
+              <div className="text-[12.5px] text-text-secondary pt-2 mt-1 border-t border-border">
+                Total unpaid interest:{" "}
+                <strong className="text-text">
+                  {formatCurrency(monthlySchedule.filter((c) => c.status === "OVERDUE" || c.status === "DUE").reduce((s, c) => s + c.amount, 0))}
+                </strong>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard
@@ -181,18 +201,8 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           icon={Clock}
           tone={balance.interestRemaining > 0 ? "warning" : "success"}
           hint={
-            balance.interestPendingWhole > 0.01
-              ? (() => {
-                  // interestPerPeriod is on the CURRENT outstanding principal, so
-                  // it's 0 once the principal is fully repaid — even while an
-                  // older, still-unpaid interest cycle keeps this loan Overdue.
-                  // Dividing by it then would render "Infinity Months"; there's
-                  // no rate basis left to recover a real month count from, so
-                  // just drop the count rather than guess a wrong one.
-                  if (balance.interestPerPeriod <= 0) return `Overdue – Interest Pending (${formatCurrency(balance.interestPendingWhole)}), principal already repaid`;
-                  const months = Math.round(balance.interestPendingWhole / balance.interestPerPeriod);
-                  return `${months === 1 ? "Overdue – This Month Interest" : `Overdue – Last ${months} Months Interest`} (${formatCurrency(balance.interestPendingWhole)}), rest still accruing`;
-                })()
+            pendingInterestCaption(status, balance)
+              ? `${pendingInterestCaption(status, balance)} (${formatCurrency(balance.interestPendingWhole)}), ${balance.interestPerPeriod <= 0 ? "principal already repaid" : "rest still accruing"}`
               : balance.interestPendingWholeRaw > 0.01
                 ? // A just-completed period is unpaid but still inside its grace
                   // window — say so plainly rather than "Next due" next month,

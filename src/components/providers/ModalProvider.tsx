@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 type ModalSize = "sm" | "md" | "lg" | "xl";
@@ -30,9 +30,39 @@ const SIZE_CLASS: Record<ModalSize, string> = {
 
 export function ModalProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<{ content: ReactNode; options: ModalOptions } | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const openModal = useCallback((content: ReactNode, options: ModalOptions = {}) => setState({ content, options }), []);
   const closeModal = useCallback(() => setState(null), []);
+
+  // Escape closes the current modal — mirroring the backdrop-click behavior
+  // below, a persistent modal isn't dismissed this way either — only while a
+  // modal is actually open.
+  useEffect(() => {
+    if (!state) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !state.options.persistent) closeModal();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [state, closeModal]);
+
+  // Move focus into the dialog whenever it (re)opens, so keyboard/screen
+  // reader users land inside it instead of on whatever triggered it.
+  useEffect(() => {
+    if (state) dialogRef.current?.focus();
+  }, [state]);
+
+  // Lock body scroll while any modal is open, restoring whatever value the
+  // page had set beforehand once it closes.
+  useEffect(() => {
+    if (!state) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [state]);
 
   return (
     <ModalContext.Provider value={{ openModal, closeModal }}>
@@ -55,6 +85,8 @@ export function ModalProvider({ children }: { children: ReactNode }) {
         >
           <div className="min-h-full flex items-center justify-center p-0 sm:p-5">
             <div
+              ref={dialogRef}
+              tabIndex={-1}
               role="dialog"
               aria-modal="true"
               className={cn(

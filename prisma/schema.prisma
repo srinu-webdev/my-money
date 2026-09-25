@@ -48,6 +48,12 @@ model Admin {
   name         String
   email        String   @unique
   passwordHash String
+  // Bumped whenever the password changes. Embedded in every session JWT
+  // at login time (see src/lib/auth.ts) so a session issued before a
+  // password change is rejected on its next use — without this, a stolen
+  // session cookie would keep working for its full lifetime even after
+  // the legitimate admin noticed the compromise and changed their password.
+  passwordChangedAt DateTime @default(now())
   phone        String?
   avatar       String?  @db.Text
   role         String   @default("Administrator")
@@ -96,6 +102,15 @@ model Loan {
   repaymentType     String
   status            LoanStatus        @default(ACTIVE)
   cancelledAt       DateTime?         @db.Date
+  // Set the moment the loan first becomes fully settled (automatically
+  // after the payment that brings totalOutstanding to ~0, or via the
+  // manual Close Loan action) — mirrors cancelledAt's role exactly:
+  // freezes interest accrual at this date so a tiny leftover-paisa
+  // residual can't keep silently accruing for years and eventually push
+  // totalOutstanding back over the PAID threshold, flipping a genuinely
+  // completed loan back to OVERDUE. Cleared if a loan is ever reopened
+  // (e.g. a payment edit/delete drops it back below fully paid).
+  paidAt            DateTime?         @db.Date
   // Overrides the recurring monthly collection day (which otherwise
   // defaults to startDate's own day-of-month) — set when the real-world
   // collection day the lender actually uses differs from when the loan

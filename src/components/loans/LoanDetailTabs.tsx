@@ -60,7 +60,7 @@ export function LoanDetailTabs({ payments, schedule, activities, interestAccrued
                     <tr key={i}>
                       <Td>{formatDate(s.from)}</Td>
                       <Td>{formatDate(s.to)}</Td>
-                      <Td>{s.periods > 0 ? `${s.days} d (${s.periods} full period${s.periods === 1 ? "" : "s"} owed)` : `${s.days} d (in progress, not yet a full period)`}</Td>
+                      <Td>{Number.isInteger(s.periods) && s.periods > 0 ? `${s.days} d (${s.periods} full period${s.periods === 1 ? "" : "s"} owed)` : s.periods > 0 ? `${s.days} d (partial period, prorated share owed)` : `${s.days} d (in progress, not yet a full period)`}</Td>
                       <Td className="text-right mono-nums">{formatCurrency(s.principal)}</Td>
                       <Td className="text-right mono-nums">{formatCurrency(s.interest)}</Td>
                       <Td className="text-text-secondary">{s.event}</Td>

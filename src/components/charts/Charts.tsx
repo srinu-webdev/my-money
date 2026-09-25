@@ -44,6 +44,14 @@ export function useChartColors() {
   };
 }
 
+// Escapes text before it's interpolated into the tooltip's HTML string below.
+// Every caller today only passes fixed, hardcoded labels, so this is a no-op
+// in practice — it's just a safety net against a future free-text label
+// turning `box.innerHTML = html` into an XSS sink.
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 // Chart.js's own canvas-drawn tooltip is supposed to flip sides when there's
 // no room, but a point right at the chart's edge (e.g. the last month on a
 // line chart) doesn't reliably trigger that flip — the box gets clipped by
@@ -86,7 +94,7 @@ function externalTooltip(c: ReturnType<typeof useChartColors>) {
     box.style.backgroundColor = c.tooltipBg;
 
     let html = "";
-    if (tooltip.title?.length) html += `<div style="font-weight:600;margin-bottom:2px">${tooltip.title.join(" ")}</div>`;
+    if (tooltip.title?.length) html += `<div style="font-weight:600;margin-bottom:2px">${escapeHtml(tooltip.title.join(" "))}</div>`;
     tooltip.body.forEach((b: { lines: string[] }, i: number) => {
       // tooltip.labelColors[i].backgroundColor can be a live CanvasGradient
       // object (the line charts' area-fill), not a CSS-usable string — pull
@@ -99,7 +107,7 @@ function externalTooltip(c: ReturnType<typeof useChartColors>) {
       const color = dataset ? (pick(dataset.borderColor) ?? pick(dataset.backgroundColor)) : undefined;
       const swatch = color ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color};margin-right:6px"></span>` : "";
       b.lines.forEach((line: string) => {
-        html += `<div style="display:flex;align-items:center">${swatch}${line}</div>`;
+        html += `<div style="display:flex;align-items:center">${swatch}${escapeHtml(line)}</div>`;
       });
     });
     box.innerHTML = html;

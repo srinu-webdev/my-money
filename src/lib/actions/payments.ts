@@ -7,10 +7,10 @@ import { requireAdminId, getSessionPayload } from "@/lib/auth";
 import { paymentSchema } from "@/lib/validations";
 import { nextId } from "@/lib/ids";
 import { logActivity, pushNotification } from "@/lib/log";
-import { calculateLoanBalance, computeAllocation } from "@/lib/calculations";
+import { calculateLoanBalance, computeAllocation, round2 } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 import { isoToDbDate, serializeDisbursement, serializeLoan, serializePayment } from "@/lib/serialize";
-import { businessNow, parseDate } from "@/lib/dates";
+import { businessNow, parseDate, todayStr } from "@/lib/dates";
 import type { ActionResult, Disbursement, Loan, Payment } from "@/lib/types";
 
 type Tx = Prisma.TransactionClient;
@@ -31,11 +31,16 @@ async function syncLoanStatusAfterPaymentChange(tx: Tx, loanId: string) {
   const loan = serializeLoan(loanRow);
   const bal = calculateLoanBalance(loan, payments.map(serializePayment), undefined, disbursements.map(serializeDisbursement));
   if (bal.totalOutstanding <= 1 && loanRow.status !== "PAID") {
-    await tx.loan.update({ where: { id: loanId }, data: { status: "PAID" } });
+    // paidAt freezes interest accrual from this exact moment on (see
+    // calculateInterestBreakdown/getLoanSchedule) — without it, a leftover
+    // few-paisa residual keeps accruing indefinitely and could eventually,
+    // after enough years, push totalOutstanding back over the threshold.
+    await tx.loan.update({ where: { id: loanId }, data: { status: "PAID", paidAt: isoToDbDate(todayStr()) } });
     await logActivity(tx, "loan_paid", `Loan ${loanId} fully paid`, { customerId: loanRow.customerId, loanId });
     await pushNotification(tx, "paid", `Loan ${loanId} fully paid by ${(await tx.customer.findUnique({ where: { id: loanRow.customerId } }))?.name ?? "customer"}`);
   } else if (bal.totalOutstanding > 1 && loanRow.status === "PAID") {
-    await tx.loan.update({ where: { id: loanId }, data: { status: "ACTIVE" } });
+    // Reopened (a payment was edited/deleted below what fully settled it) — clear paidAt so accrual resumes.
+    await tx.loan.update({ where: { id: loanId }, data: { status: "ACTIVE", paidAt: null } });
   }
 }
 
@@ -64,10 +69,21 @@ function validateAllocation(
     if (a.principalAmount > a.principalRemaining + 0.01) {
       return `Principal portion (${formatCurrency(a.principalAmount)}) exceeds principal outstanding (${formatCurrency(a.principalRemaining)}).`;
     }
+    if (a.interestAmount > a.interestRemaining + 0.01) {
+      return `Interest portion (${formatCurrency(a.interestAmount)}) exceeds interest outstanding (${formatCurrency(a.interestRemaining)}).`;
+    }
   } else {
     if (a.interestAmount + a.principalAmount <= 0) return "Nothing is outstanding for the selected allocation. Choose a different allocation.";
     if (a.unallocated > 0.01) return `Payment exceeds the outstanding balance by ${formatCurrency(a.unallocated)}. Reduce the amount or use a custom split.`;
   }
+  // Explicit backend invariant (not just an implicit consequence of how
+  // computeAllocation happens to be written today): an "interest" payment
+  // must never touch principal, and a "principal" payment must never touch
+  // interest. Guards this specific rule directly against a future
+  // refactor accidentally breaking it, independent of computeAllocation's
+  // own internals.
+  if (allocation === "interest" && a.principalAmount !== 0) return "Internal error: an Interest Only payment must not allocate anything to principal.";
+  if (allocation === "principal" && a.interestAmount !== 0) return "Internal error: a Principal Only payment must not allocate anything to interest.";
   return null;
 }
 
@@ -92,6 +108,28 @@ export async function createPaymentAction(input: unknown): Promise<ActionResult<
   if (err) return { ok: false, error: err };
 
   const a = computeAllocation(loan, existing, d.amount, d.allocation, { interestAmount: d.customInterest, principalAmount: d.customPrincipal }, d.paymentDate, disbursements);
+
+  // Idempotency guard: a flaky double-tap or a retried request shouldn't
+  // create two independent payment rows for what's really one real-world
+  // payment. Doesn't replace the client's own submit-button disabling —
+  // it's the server-side backstop for when that isn't enough.
+  const recentDuplicate = await prisma.payment.findFirst({
+    where: {
+      loanId: d.loanId,
+      // round2: summing two already-rounded 2-decimal numbers can still
+      // land a few ULPs past 2 decimal places in IEEE-754 (e.g.
+      // 1500.0000000000002) — an exact-equality DB filter on that noisy
+      // value can silently fail to match the cleanly-stored row, letting
+      // a real duplicate slip through this guard undetected.
+      amount: round2(a.interestAmount + a.principalAmount),
+      paymentDate: isoToDbDate(d.paymentDate),
+      createdAt: { gte: new Date(Date.now() - 10_000) },
+    },
+  });
+  if (recentDuplicate) {
+    return { ok: false, error: "A matching payment was just recorded a moment ago. Check the payments list before retrying to avoid a duplicate." };
+  }
+
   const session = await getSessionPayload();
   const admin = session ? await prisma.admin.findUnique({ where: { id: session.adminId } }) : null;
   const customer = await prisma.customer.findUnique({ where: { id: loan.customerId } });
@@ -103,7 +141,7 @@ export async function createPaymentAction(input: unknown): Promise<ActionResult<
         id,
         loanId: d.loanId,
         customerId: loan.customerId,
-        amount: a.interestAmount + a.principalAmount,
+        amount: round2(a.interestAmount + a.principalAmount),
         interestAmount: a.interestAmount,
         principalAmount: a.principalAmount,
         paymentMethod: d.paymentMethod,
@@ -137,8 +175,12 @@ export async function updatePaymentAction(id: string, input: unknown): Promise<A
 
   const loanRow = await prisma.loan.findUnique({ where: { id: d.loanId } });
   if (!loanRow) return { ok: false, error: "Please select a valid loan." };
+  if (loanRow.status === "CANCELLED") return { ok: false, error: "This loan is cancelled." };
   const loan = serializeLoan(loanRow);
   if (parseDate(d.paymentDate) > businessNow()) return { ok: false, error: "Payment date cannot be in the future." };
+  if (parseDate(d.paymentDate) < parseDate(loan.startDate)) {
+    return { ok: false, error: `Payment date cannot be before the loan start date.` };
+  }
 
   const others = (await prisma.payment.findMany({ where: { loanId: d.loanId, id: { not: id } } })).map(serializePayment);
   const disbursements = (await prisma.disbursement.findMany({ where: { loanId: d.loanId } })).map(serializeDisbursement);
@@ -152,7 +194,7 @@ export async function updatePaymentAction(id: string, input: unknown): Promise<A
       data: {
         loanId: d.loanId,
         customerId: loan.customerId,
-        amount: a.interestAmount + a.principalAmount,
+        amount: round2(a.interestAmount + a.principalAmount),
         interestAmount: a.interestAmount,
         principalAmount: a.principalAmount,
         paymentMethod: d.paymentMethod,

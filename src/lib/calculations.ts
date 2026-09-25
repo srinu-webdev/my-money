@@ -38,7 +38,7 @@
 // as before — the full principal is treated as handed over on the start
 // date.
 // =====================================================================
-import { addDays, businessNow, daysBetween, parseDate, startOfDay, toISODate } from "./dates";
+import { addDays, addMonths, businessNow, daysBetween, parseDate, startOfDay, toISODate } from "./dates";
 import type {
   AllocationMode,
   CustomerSummary,
@@ -75,49 +75,78 @@ export const FREQ_NOUN: Record<InterestFrequency, string> = {
   YEARLY: "year",
 };
 
-function round2(n: number): number {
+export function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
-// How many periods have FULLY completed — 29 days into a 30-day period
-// is still 0 complete periods, 30 days in is 1, 31-59 is still 1. Used
-// for DAILY/WEEKLY/YEARLY frequencies, where a period is a fixed number
-// of days.
-function periodsCompleted(days: number, periodDays: number): number {
-  return days > 0 ? Math.floor(days / periodDays) : 0;
+interface PeriodBoundary {
+  start: Date;
+  end: Date;
+  /** The FULL length of this period in days — even for the trailing in-progress period, where it's the denominator for prorating today's partial share, not `end - start` (which for that one is just "how far we've gotten so far"). */
+  length: number;
+  complete: boolean;
 }
 
-// MONTHLY frequency uses REAL calendar months anchored to a specific
-// day-of-month (the day the loan's money changed hands), not a rigid 30-day block —
-// a month is 28-31 days depending which one it is, and a loan taken on
-// the 10th is due on the 10th of the next calendar month, not "30 days
-// later" (which lands on the 9th for a 31-day month like August, a day
-// early). Returns how many full collection cycles have completed by
-// `asOf`, the boundary date the most recent one completed on (= the
-// start of the period still running), and that in-progress period's
-// actual length in days (needed to prorate today's partial share —
-// never a fixed 30, since real months vary).
-function monthlyPeriodInfo(firstDate: Date, asOf: Date, anchorDay: number): { count: number; lastBoundary: Date; currentPeriodLengthDays: number } {
-  const startY = firstDate.getFullYear();
-  const startM = firstDate.getMonth();
-  let count = 0;
-  let lastBoundary = firstDate;
-  let nextBoundary = firstDate;
-  for (let i = 0; i <= 1200; i++) {
-    const y = startY;
-    const m = startM + i;
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const candidate = new Date(y, m, Math.min(anchorDay, daysInMonth));
-    if (candidate <= firstDate) continue; // this occurrence is at/before the period even started
-    if (candidate <= asOf) {
-      count++;
-      lastBoundary = candidate;
-      continue;
+// Splits [firstDate, asOf] into consecutive accrual periods, oldest first.
+// MONTHLY and YEARLY periods are REAL calendar months/years anchored to
+// `anchorDate`'s day-of-month (and, for yearly, its month too) — 28-31 days
+// for a month, 365 or 366 for a year, clamped to the target month's actual
+// length (a "31st" or a "29 Feb" anchor lands on the last real day of a
+// shorter month / a non-leap February, same idea either way — a leap-year
+// YEARLY loan no longer drifts a day early the way a flat 365-day period
+// would). DAILY/WEEKLY periods are a fixed number of days. The final
+// period is marked `complete: false` when `asOf` falls before its natural
+// end (the period still running).
+function getPeriodBoundaries(firstDate: Date, asOf: Date, frequency: InterestFrequency, anchorDate: Date, periodDays: number): PeriodBoundary[] {
+  const periods: PeriodBoundary[] = [];
+  if (frequency === "MONTHLY" || frequency === "YEARLY") {
+    const anchorDay = anchorDate.getDate();
+    const step = frequency === "YEARLY" ? 12 : 1;
+    const startY = firstDate.getFullYear();
+    const startM = firstDate.getMonth();
+    let prev = firstDate;
+    for (let i = 0; i <= 1200; i++) {
+      const m = startM + i * step;
+      const daysInMonth = new Date(startY, m + 1, 0).getDate();
+      const candidate = new Date(startY, m, Math.min(anchorDay, daysInMonth));
+      if (candidate <= firstDate) continue; // this occurrence is at/before the period even started
+      const length = Math.max(1, Math.round((candidate.getTime() - prev.getTime()) / 86400000));
+      if (candidate <= asOf) {
+        periods.push({ start: prev, end: candidate, length, complete: true });
+        prev = candidate;
+        continue;
+      }
+      if (asOf > prev) periods.push({ start: prev, end: asOf, length, complete: false });
+      break;
     }
-    nextBoundary = candidate;
-    break;
+  } else {
+    let prev = firstDate;
+    for (let i = 0; i <= 200000; i++) {
+      const candidate = addDays(firstDate, (i + 1) * periodDays);
+      if (candidate <= asOf) {
+        periods.push({ start: prev, end: candidate, length: periodDays, complete: true });
+        prev = candidate;
+        continue;
+      }
+      if (asOf > prev) periods.push({ start: prev, end: asOf, length: periodDays, complete: false });
+      break;
+    }
   }
-  const currentPeriodLengthDays = Math.max(1, Math.round((nextBoundary.getTime() - lastBoundary.getTime()) / 86400000));
-  return { count, lastBoundary, currentPeriodLengthDays };
+  return periods;
+}
+
+// One period's contribution for the days a given balance was actually
+// outstanding DURING it (days/length of that period) — the same
+// day-weighted idea already used for "today's running share of the period
+// still in progress", now applied uniformly to every balance-holding span
+// within every period, not just the trailing one. This is what makes a
+// mid-period principal repayment or disbursement tranche split a period's
+// interest correctly between the balances that actually applied, instead
+// of billing the whole period at whichever balance happened to be current
+// when the period's boundary was finally reached.
+function periodContribution(bal: number, days: number, periodLength: number, interestType: "PERCENTAGE" | "FIXED", rate: number): number {
+  if (bal <= 0 || days <= 0) return 0;
+  const fraction = days / periodLength;
+  return interestType === "FIXED" ? rate * fraction : bal * (rate / 100) * fraction;
 }
 function sum<T>(arr: T[], fn: (x: T) => number): number {
   return arr.reduce((s, x) => s + (Number(fn(x)) || 0), 0);
@@ -142,7 +171,7 @@ export interface InterestBreakdown {
 }
 
 export function calculateInterestBreakdown(
-  loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt">,
+  loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt" | "paidAt">,
   asOfDate: string | Date,
   payments: PaymentLike[],
   disbursements?: DisbursementLike[]
@@ -152,10 +181,19 @@ export function calculateInterestBreakdown(
     const c = startOfDay(loan.cancelledAt);
     if (c < asOf) asOf = c; // accrual stops at cancellation
   }
+  if (loan.status === "PAID" && loan.paidAt) {
+    // Same idea as cancellation: once a loan is fully settled, accrual
+    // must stop for good — otherwise a leftover few-paisa residual (e.g.
+    // ₹0.33) keeps accruing a fraction of a paisa every period forever,
+    // and given enough years could silently push totalOutstanding back
+    // over the PAID threshold, flipping a genuinely completed loan back
+    // to OVERDUE with no payment ever having been missed.
+    const p = startOfDay(loan.paidAt);
+    if (p < asOf) asOf = p;
+  }
 
   const rate = Number(loan.interestRate) || 0;
   const periodDays = FREQUENCY_DAYS[loan.interestFrequency] || 30;
-  const isMonthly = loan.interestFrequency === "MONTHLY";
   // Accrual anchors to the day the money actually changed hands — NOT
   // loan.collectionDay. The collection day is only when the lender goes
   // to collect (due-date display, Due Payments list, reminder cron); if
@@ -163,7 +201,7 @@ export function calculateInterestBreakdown(
   // the 10th to "collect on the 15th" would re-carve its history into a
   // 5-day stub charged as a whole month, rewriting cycles the customer
   // has already settled.
-  const anchorDay = parseDate(loan.startDate).getDate();
+  const anchorDate = parseDate(loan.startDate);
 
   // One merged, chronological timeline: disbursements raise the accruing
   // balance, principal repayments lower it. A pure interest payment
@@ -180,77 +218,118 @@ export function calculateInterestBreakdown(
   const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
   if (asOf <= firstDate) return { total: 0, whole: 0, currentPeriodStart: toISODate(firstDate) };
 
-  let segStart = firstDate;
+  // Apply any events dated at/before firstDate up front (e.g. two same-day
+  // disbursements) so `bal` starts each period walk already correct.
   let bal = 0;
+  let idx = 0;
+  while (idx < events.length && events[idx].date <= firstDate) {
+    bal = Math.max(0, bal + events[idx].delta);
+    idx++;
+  }
+
+  // Walk period-by-period (not just balance-change-by-balance-change): a
+  // period can span multiple balances (an early partial repayment mid-
+  // cycle) or a balance can span multiple periods (nothing changes for
+  // months) — either way, each period's own interest is the SUM of every
+  // balance's day-weighted share of it, so a mid-period balance change
+  // splits that one period's interest between the balances that actually
+  // applied, instead of billing the whole period at whichever balance
+  // happened to be current once the period's boundary was finally reached.
+  const periods = getPeriodBoundaries(firstDate, asOf, loan.interestFrequency, anchorDate, periodDays);
   let whole = 0;
-  // Whole-completed-periods are counted GLOBALLY from firstDate, never
-  // reset per segment — each segment is only charged for whatever NEW
-  // whole periods its own end newly completes (at that segment's own
-  // balance), so splitting the timeline at a balance-changing event can
-  // never double-charge a period that was already complete.
-  let periodsCharged = 0;
-  const accrueWholeSegment = (segEnd: Date) => {
-    if (segEnd <= segStart) return;
-    const totalPeriods = isMonthly ? monthlyPeriodInfo(firstDate, segEnd, anchorDay).count : periodsCompleted(daysBetween(firstDate, segEnd), periodDays);
-    const newPeriods = Math.max(0, totalPeriods - periodsCharged);
-    if (newPeriods > 0 && bal > 0) {
-      whole += loan.interestType === "FIXED" ? rate * newPeriods : bal * (rate / 100) * newPeriods;
-    }
-    periodsCharged = totalPeriods;
-  };
-  for (const ev of events) {
-    if (ev.date <= segStart) {
-      bal = Math.max(0, bal + ev.delta);
-      continue;
-    }
-    // A payment/disbursement dated TODAY has already happened by the time
-    // we're asking "how much is owed as of today" — matching getLoanSchedule
-    // below (strict `>`, not `>=`). Excluding same-day events here caused a
-    // paid-off loan to keep accruing a phantom fractional amount on its old
-    // balance for the rest of the day it was actually settled.
-    if (ev.date > asOf) break;
-    accrueWholeSegment(ev.date);
-    bal = Math.max(0, bal + ev.delta);
-    segStart = ev.date;
-  }
-  accrueWholeSegment(asOf);
-
-  // The period still in progress (since the last completed boundary)
-  // accrues continuously at today's balance — never a lump full-period
-  // charge on day one. For MONTHLY loans this uses the CURRENT period's
-  // real length (28-31 days, whatever that calendar month actually is),
-  // not a fixed 30 — a day into a 31-day month is a smaller fraction
-  // than a day into February.
-  let daysIntoCurrentPeriod: number;
-  let currentPeriodLength: number;
-  let periodStartDate: Date;
-  if (isMonthly) {
-    const info = monthlyPeriodInfo(firstDate, asOf, anchorDay);
-    periodStartDate = info.lastBoundary;
-    daysIntoCurrentPeriod = daysBetween(info.lastBoundary, asOf);
-    currentPeriodLength = info.currentPeriodLengthDays;
-  } else {
-    periodStartDate = addDays(firstDate, periodsCharged * periodDays);
-    daysIntoCurrentPeriod = daysBetween(firstDate, asOf) - periodsCharged * periodDays;
-    currentPeriodLength = periodDays;
-  }
   let fractional = 0;
-  if (daysIntoCurrentPeriod > 0 && bal > 0) {
-    const fraction = daysIntoCurrentPeriod / currentPeriodLength;
-    fractional = loan.interestType === "FIXED" ? rate * fraction : bal * (rate / 100) * fraction;
+  let currentPeriodStart = firstDate;
+  for (const period of periods) {
+    let segStart = period.start;
+    let periodInterest = 0;
+    // A payment/disbursement dated TODAY has already happened by the time
+    // we're asking "how much is owed as of today" (strict `<=` against
+    // asOf/period.end) — excluding same-day events here caused a paid-off
+    // loan to keep accruing a phantom amount on its old balance for the
+    // rest of the day it was actually settled.
+    while (idx < events.length && events[idx].date <= period.end && events[idx].date > segStart) {
+      periodInterest += periodContribution(bal, daysBetween(segStart, events[idx].date), period.length, loan.interestType, rate);
+      bal = Math.max(0, bal + events[idx].delta);
+      segStart = events[idx].date;
+      idx++;
+    }
+    periodInterest += periodContribution(bal, daysBetween(segStart, period.end), period.length, loan.interestType, rate);
+    if (period.complete) whole += periodInterest;
+    else fractional += periodInterest;
+    currentPeriodStart = period.complete ? period.end : period.start;
   }
 
-  const currentPeriodStart = toISODate(periodStartDate);
-  return { total: Math.max(0, round2(whole + fractional)), whole: Math.max(0, round2(whole)), currentPeriodStart };
+  return {
+    total: Math.max(0, round2(whole + fractional)),
+    whole: Math.max(0, round2(whole)),
+    currentPeriodStart: toISODate(currentPeriodStart),
+  };
 }
 
 export function calculateInterestForLoan(
-  loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt">,
+  loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt" | "paidAt">,
   asOfDate: string | Date,
   payments: PaymentLike[],
   disbursements?: DisbursementLike[]
 ): number {
   return calculateInterestBreakdown(loan, asOfDate, payments, disbursements).total;
+}
+
+export interface DailyInstallmentPlan {
+  /** The fixed day-one rate: (principal + full-term interest) spread evenly across the loan's whole term. Shown for reference — never what's actually required going forward once payment history exists. */
+  dailyAmount: number;
+  totalDays: number;
+  totalPayable: number;
+  daysElapsed: number;
+  expectedByNow: number;
+  aheadOrBehind: number;
+  catchUpAmount: number;
+  missedDays: number;
+  projectedTotal: number;
+  projectedShortfall: number;
+  /** What's still owed against the original full-term total. */
+  remainingAmount: number;
+  /** Days left until the due date (never less than 1, so this is always a divisor). */
+  remainingDays: number;
+  /** THE headline figure: remainingAmount / remainingDays — recalculated fresh from whatever actually happened, never the fixed day-one rate. */
+  requiredDailyNow: number;
+}
+
+/**
+ * Daily Installment plan — shared by the loan detail page and the daily
+ * reminder notification so the two can never show different numbers for
+ * the same loan on the same day. `totalPaid` is passed in rather than a
+ * full LoanBalance so this stays a plain pure function.
+ */
+export function dailyInstallmentPlan(
+  loan: Pick<Loan, "principal" | "startDate" | "dueDate" | "repaymentType" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt" | "paidAt">,
+  totalPaid: number,
+  asOfDate: string | Date,
+  disbursements?: DisbursementLike[]
+): DailyInstallmentPlan | null {
+  if (loan.repaymentType !== "Daily Installment") return null;
+  const totalDays = daysBetween(loan.startDate, loan.dueDate);
+  if (totalDays <= 0) return null;
+  const fullTermInterest = calculateInterestForLoan(loan, loan.dueDate, [], disbursements);
+  const totalPayable = loan.principal + fullTermInterest;
+  const dailyAmount = totalPayable / totalDays;
+  const daysElapsed = Math.min(totalDays, Math.max(0, daysBetween(loan.startDate, asOfDate)));
+  const expectedByNow = dailyAmount * daysElapsed;
+  const aheadOrBehind = totalPaid - expectedByNow;
+  // A missed day doesn't just vanish — it rolls forward and stacks on top
+  // of every day after it, so "catch up" is always the full cumulative
+  // gap (every missed day included), never just "yesterday".
+  const catchUpAmount = Math.max(0, -aheadOrBehind);
+  const missedDays = dailyAmount > 0 ? Math.round(catchUpAmount / dailyAmount) : 0;
+  // Projected to the due date at today's actual average daily pace —
+  // answers "will the full amount actually arrive by the due date".
+  const avgDailyPace = daysElapsed > 0 ? totalPaid / daysElapsed : dailyAmount;
+  const projectedTotal = avgDailyPace * totalDays;
+  const projectedShortfall = Math.max(0, totalPayable - projectedTotal);
+  const remainingAmount = Math.max(0, round2(totalPayable - totalPaid));
+  const remainingDays = Math.max(1, totalDays - daysElapsed);
+  const requiredDailyNow = round2(remainingAmount / remainingDays);
+  return { dailyAmount, totalDays, totalPayable, daysElapsed, expectedByNow, aheadOrBehind, catchUpAmount, missedDays, projectedTotal, projectedShortfall, remainingAmount, remainingDays, requiredDailyNow };
 }
 
 export interface StrictCycleGap {
@@ -262,10 +341,30 @@ export interface StrictCycleGap {
 
 type PaymentLikeInterest = Pick<Payment, "paymentDate" | "interestAmount" | "principalAmount">;
 
+export interface MonthlyCycleStatus {
+  /** This cycle's own accrual window (the month it covers). */
+  start: string;
+  /** This cycle's due date — also what it's labeled by (e.g. "the October cycle" is the one due in October). */
+  end: string;
+  amount: number;
+  status: "PAID" | "OVERDUE" | "DUE" | "UPCOMING";
+}
+
 // MONTHLY-only, by explicit request: each recurring monthly cycle must be
-// settled by its OWN payment(s), dated on or after that cycle's own end
-// date — a payment made DURING a cycle (before it ends) can't be credited
-// to it, only to whichever cycle(s) it has actually reached by its date.
+// settled by its OWN payment(s) — but a payment dated anywhere from that
+// cycle's own START onward qualifies, INCLUDING a few days early (before
+// the cycle's end/due date). A payment can be credited to any cycle that
+// has already begun by its date; it is never required to wait until that
+// cycle is over. This matters: gating on the cycle's END date instead (an
+// earlier version of this function did) meant a customer who always pays
+// a few days into each new cycle — a completely normal pattern — had
+// every payment quietly matched to the PREVIOUS cycle instead of its own,
+// permanently shifting every cycle after it back by one and leaving the
+// most recent one perpetually "unpaid" no matter how consistently they
+// paid (surfaced in practice as an already-settled loan showing something
+// like "Overdue – Last 50506 Months Interest" once interestPerPeriod had
+// shrunk near zero from being paid down).
+//
 // This is a genuinely different rule from the interestPendingWhole/
 // interestRemaining/interestAccrued math elsewhere in this file, which
 // track a plain running total (how much is owed vs how much has ever come
@@ -277,46 +376,39 @@ type PaymentLikeInterest = Pick<Payment, "paymentDate" | "interestAmount" | "pri
 // boundaries, taken from calculateInterestBreakdown itself (not re-derived
 // here) so a mid-loan principal repayment or disbursement tranche that
 // changes the balance is still accounted for correctly. Payments are
-// matched oldest-cycle-first, greedily, from whichever qualifying (date >=
-// that cycle's end) payment is earliest — a payment's leftover after
-// settling one cycle can still apply to a later one, but only if its own
-// date also reaches that later cycle's end.
-export function strictCycleGap(
-  loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt">,
+// matched oldest-cycle-first, greedily, from whichever qualifying payment
+// is earliest — a payment's leftover after settling one cycle can still
+// apply to a later one.
+export function monthlyInterestSchedule(
+  loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt" | "paidAt">,
   asOfDate: string | Date,
   payments: PaymentLikeInterest[],
-  disbursements?: DisbursementLike[]
-): StrictCycleGap {
-  if (loan.interestFrequency !== "MONTHLY") return { amount: 0, sinceDate: null };
+  disbursements?: DisbursementLike[],
+  /** How many not-yet-due future cycles to include after the current one, for a forward-looking schedule view. 0 = past + due cycles only. */
+  upcomingCount = 0
+): MonthlyCycleStatus[] {
+  if (loan.interestFrequency !== "MONTHLY") return [];
   const asOf = startOfDay(asOfDate);
-  const anchorDay = parseDate(loan.startDate).getDate();
+  const anchorDate = parseDate(loan.startDate);
   const firstEventDate = effectiveDisbursements(loan, disbursements).reduce(
     (min, d) => (startOfDay(d.date) < min ? startOfDay(d.date) : min),
     startOfDay(loan.startDate)
   );
 
-  // Every completed cycle's own end date, oldest first — mirrors
-  // monthlyPeriodInfo's boundary walk above so the two never disagree.
-  const boundaries: Date[] = [];
-  const startY = firstEventDate.getFullYear();
-  const startM = firstEventDate.getMonth();
-  for (let i = 0; i <= 1200; i++) {
-    const y = startY;
-    const m = startM + i;
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const candidate = new Date(y, m, Math.min(anchorDay, daysInMonth));
-    if (candidate <= firstEventDate) continue;
-    if (candidate > asOf) break;
-    boundaries.push(candidate);
-  }
-  if (!boundaries.length) return { amount: 0, sinceDate: null };
+  // Walk a bit PAST `asOf` too (not just up to it) so upcoming, not-yet-due
+  // cycles can be included — every one of these synthetic future periods
+  // reports as "complete" relative to the extended walk, which is fine:
+  // classification below compares each cycle's own end date against the
+  // REAL asOf, not against this walk's endpoint.
+  const periods = getPeriodBoundaries(firstEventDate, addMonths(asOf, upcomingCount + 2), "MONTHLY", anchorDate, FREQUENCY_DAYS.MONTHLY);
+  if (!periods.length) return [];
 
   let prevWhole = 0;
-  const cycles = boundaries.map((end) => {
-    const whole = calculateInterestBreakdown(loan, end, payments, disbursements).whole;
+  const cycles = periods.map((period) => {
+    const whole = calculateInterestBreakdown(loan, period.end, payments, disbursements).whole;
     const cost = round2(whole - prevWhole);
     prevWhole = whole;
-    return { end, cost };
+    return { start: period.start, end: period.end, cost };
   });
 
   const pool = payments
@@ -324,25 +416,46 @@ export function strictCycleGap(
     .filter((p) => p.remaining > 0.01)
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  let totalGap = 0;
-  let sinceDate: string | null = null;
+  const rows: MonthlyCycleStatus[] = [];
+  let upcomingShown = 0;
   for (const cycle of cycles) {
-    if (cycle.cost <= 0.01) continue;
+    if (cycle.cost <= 0.01) continue; // nothing accrued this cycle (e.g. loan already fully repaid) — nothing to schedule
     let covered = 0;
     for (const p of pool) {
       if (covered >= cycle.cost - 0.01) break;
-      if (p.remaining <= 0.01 || p.date < cycle.end) continue;
+      if (p.remaining <= 0.01 || p.date < cycle.start) continue; // the fix: >= cycle.start, not >= cycle.end
       const take = Math.min(p.remaining, round2(cycle.cost - covered));
       covered = round2(covered + take);
       p.remaining = round2(p.remaining - take);
     }
-    const shortfall = round2(cycle.cost - covered);
-    if (shortfall > 0.01) {
-      totalGap = round2(totalGap + shortfall);
-      if (!sinceDate) sinceDate = toISODate(cycle.end);
+    const isPaid = covered >= cycle.cost - 0.01;
+    const daysSinceEnd = daysBetween(cycle.end, asOf);
+    const status: MonthlyCycleStatus["status"] = isPaid
+      ? "PAID"
+      : daysSinceEnd > MONTHLY_INTEREST_GRACE_DAYS
+        ? "OVERDUE"
+        : cycle.end <= asOf
+          ? "DUE"
+          : "UPCOMING";
+    if (status === "UPCOMING") {
+      if (upcomingShown >= upcomingCount) break; // cycles only get later from here — nothing more to show
+      upcomingShown++;
     }
+    rows.push({ start: toISODate(cycle.start), end: toISODate(cycle.end), amount: cycle.cost, status });
   }
-  return { amount: totalGap, sinceDate };
+  return rows;
+}
+
+export function strictCycleGap(
+  loan: Pick<Loan, "principal" | "startDate" | "interestRate" | "interestType" | "interestFrequency" | "status" | "cancelledAt" | "paidAt">,
+  asOfDate: string | Date,
+  payments: PaymentLikeInterest[],
+  disbursements?: DisbursementLike[]
+): StrictCycleGap {
+  const rows = monthlyInterestSchedule(loan, asOfDate, payments, disbursements, 0);
+  const unpaid = rows.filter((r) => r.status === "OVERDUE" || r.status === "DUE");
+  if (!unpaid.length) return { amount: 0, sinceDate: null };
+  return { amount: round2(unpaid.reduce((s, r) => s + r.amount, 0)), sinceDate: unpaid[0].end };
 }
 
 export function interestPerPeriod(
@@ -502,9 +615,51 @@ export function getLoanStatus(loan: Pick<Loan, "status" | "dueDate">, bal: LoanB
   return "ACTIVE";
 }
 
+// How much of an OVERDUE loan actually counts as "overdue" — the WHOLE
+// outstanding balance (principal included) once the loan's own final due
+// date has passed, or just the unpaid whole-period interest before that
+// (the loan's term isn't up yet, only a periodic cycle is late). Shared by
+// the dashboard, reports, and the Overdue table so the three can never
+// quietly drift apart the way three independent copies of this one rule
+// eventually would.
+export function overdueAmount(loan: Pick<Loan, "dueDate">, bal: LoanBalance, today: Date): number {
+  return parseDate(loan.dueDate) < today ? bal.totalOutstanding : bal.interestPendingWhole;
+}
+
+// The "Overdue – Last N Months Interest" (or "This Month"/"Interest
+// Pending") caption shown under a loan's pending-interest figure — shared
+// by the Loans table, a customer's loan list, the Monthly Collection
+// section, and the loan detail page so the four can't drift, and so a loan
+// that isn't ACTUALLY flagged Overdue (most notably one that's PAID, since
+// getLoanStatus's totalOutstanding<=1 check takes priority over the
+// interestPendingWhole check) never shows this warning just because a
+// strict per-cycle-matching quirk left a small residual gap in the
+// lifetime numbers even though the loan is, in aggregate, settled.
+//
+// interestPerPeriod is computed from the CURRENT outstanding principal, so
+// it shrinks toward zero as a loan is paid down — dividing a genuine (if
+// small) pending amount by a near-zero denominator can produce a
+// nonsensical month count (seen in practice on a nearly-fully-repaid loan:
+// "Last 50506 Months Interest" for a ₹167 residual). Falls back to the
+// generic message whenever the computed count isn't a sane, believable one.
+export function pendingInterestCaption(status: LoanStatus, bal: Pick<LoanBalance, "interestPendingWhole" | "interestPerPeriod">): string | null {
+  if (status !== "OVERDUE" || bal.interestPendingWhole <= 0.01) return null;
+  if (bal.interestPerPeriod <= 0) return "Overdue – Interest Pending";
+  const months = Math.round(bal.interestPendingWhole / bal.interestPerPeriod);
+  if (!Number.isFinite(months) || months < 1 || months > 60) return "Overdue – Interest Pending";
+  return months === 1 ? "Overdue – This Month Interest" : `Overdue – Last ${months} Months Interest`;
+}
+
+// "Completed" (not "Paid") for the terminal, fully-settled state — a
+// single word that unambiguously means the whole loan is done, not "a
+// payment was recorded." One label, used everywhere a loan's status is
+// shown (customer page, loan list, loan detail, dashboard, overdue list,
+// reports), so there is exactly one authoritative piece of text for this
+// state — never a place that still says "Paid" while another says
+// "Completed" for the same underlying status.
 export const STATUS_LABEL: Record<LoanStatus, string> = {
   ACTIVE: "Active",
-  PAID: "Paid",
+  PAID: "Completed",
   CANCELLED: "Cancelled",
   OVERDUE: "Overdue",
   PARTIALLY_PAID: "Partially Paid",
@@ -565,7 +720,6 @@ export interface LoanScheduleSegment {
 export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: string | Date, disbursements?: Disbursement[]): LoanScheduleSegment[] {
   const periodDays = FREQUENCY_DAYS[loan.interestFrequency] || 30;
   const rate = Number(loan.interestRate) || 0;
-  const isMonthly = loan.interestFrequency === "MONTHLY";
   // Accrual anchors to the day the money actually changed hands — NOT
   // loan.collectionDay. The collection day is only when the lender goes
   // to collect (due-date display, Due Payments list, reminder cron); if
@@ -573,7 +727,7 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
   // the 10th to "collect on the 15th" would re-carve its history into a
   // 5-day stub charged as a whole month, rewriting cycles the customer
   // has already settled.
-  const anchorDay = parseDate(loan.startDate).getDate();
+  const anchorDate = parseDate(loan.startDate);
   const segments: LoanScheduleSegment[] = [];
 
   // Same exclusion as calculateInterestForLoan: a pure interest payment
@@ -586,74 +740,44 @@ export function getLoanSchedule(loan: Loan, payments: Payment[], asOfDate?: stri
       .map((p) => ({ date: startOfDay(p.paymentDate), delta: -(Number(p.principalAmount) || 0), label: `Payment ${p.id}: −${formatCurrencyPlain(p.principalAmount)} principal` })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  const now = loan.status === "CANCELLED" && loan.cancelledAt ? startOfDay(loan.cancelledAt) : startOfDay(asOfDate ?? businessNow());
+  const now =
+    loan.status === "CANCELLED" && loan.cancelledAt
+      ? startOfDay(loan.cancelledAt)
+      : loan.status === "PAID" && loan.paidAt
+        ? startOfDay(loan.paidAt)
+        : startOfDay(asOfDate ?? businessNow());
   const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
-  let segStart = firstDate;
+
   let principal = 0;
-  // Same global, monotonic whole-period counter as calculateInterestBreakdown
-  // — see that function's comment for why a per-segment count would
-  // double-charge, and why only FULLY completed periods count here.
-  let periodsCharged = 0;
-
-  const push = (end: Date, event: string) => {
-    if (end <= segStart) return;
-    const totalPeriods = isMonthly ? monthlyPeriodInfo(firstDate, end, anchorDay).count : periodsCompleted(daysBetween(firstDate, end), periodDays);
-    const periods = Math.max(0, totalPeriods - periodsCharged);
-    if (principal > 0 && periods > 0) {
-      // Show the row ending at the actual period boundary reached, not
-      // at whatever `end` was passed (which for the final call is
-      // "today") — otherwise this row's date range would visually
-      // overlap the separate "still accruing" row that follows it.
-      const boundaryEnd = isMonthly ? monthlyPeriodInfo(firstDate, end, anchorDay).lastBoundary : addDays(firstDate, totalPeriods * periodDays);
-      const days = daysBetween(segStart, boundaryEnd);
-      const interest = loan.interestType === "FIXED" ? rate * periods : (principal * rate * periods) / 100;
-      segments.push({ from: toISODate(segStart), to: toISODate(boundaryEnd), days, periods, principal, interest: round2(interest), event });
-    }
-    periodsCharged = totalPeriods;
-  };
-
-  for (const ev of events) {
-    if (ev.date <= segStart) {
-      principal = Math.max(0, principal + ev.delta);
-      continue;
-    }
-    if (ev.date > now) break;
-    push(ev.date, ev.label);
-    principal = Math.max(0, principal + ev.delta);
-    segStart = ev.date;
+  let idx = 0;
+  while (idx < events.length && events[idx].date <= firstDate) {
+    principal = Math.max(0, principal + events[idx].delta);
+    idx++;
   }
-  push(now, "Period completed");
 
-  // The period still running right now accrues gradually — shown as its
-  // own row, distinct from the completed-period rows above, so it never
-  // reads as "another full month owed" before it actually is one. For
-  // MONTHLY loans this uses the current calendar month's real length
-  // (28-31 days), not a fixed 30.
-  let daysIntoCurrentPeriod: number;
-  let currentPeriodLength: number;
-  let boundaryStart: Date;
-  if (isMonthly) {
-    const info = monthlyPeriodInfo(firstDate, now, anchorDay);
-    boundaryStart = info.lastBoundary;
-    daysIntoCurrentPeriod = daysBetween(info.lastBoundary, now);
-    currentPeriodLength = info.currentPeriodLengthDays;
-  } else {
-    boundaryStart = addDays(firstDate, periodsCharged * periodDays);
-    daysIntoCurrentPeriod = daysBetween(firstDate, now) - periodsCharged * periodDays;
-    currentPeriodLength = periodDays;
-  }
-  if (daysIntoCurrentPeriod > 0 && principal > 0) {
-    const fraction = daysIntoCurrentPeriod / currentPeriodLength;
-    const interest = loan.interestType === "FIXED" ? rate * fraction : (principal * rate * fraction) / 100;
-    segments.push({
-      from: toISODate(boundaryStart),
-      to: toISODate(now),
-      days: daysIntoCurrentPeriod,
-      periods: 0,
-      principal,
-      interest: round2(interest),
-      event: "Current period accruing (not yet complete)",
-    });
+  // Same period-by-period walk as calculateInterestBreakdown: each period
+  // gets its own row per balance that actually applied during it, so a
+  // mid-period principal repayment or disbursement tranche shows up as two
+  // (correctly smaller) rows instead of one row billing the whole period
+  // at whichever balance was current once its boundary was finally reached.
+  const periods = getPeriodBoundaries(firstDate, now, loan.interestFrequency, anchorDate, periodDays);
+  for (const period of periods) {
+    let segStart = period.start;
+    const emit = (end: Date, event: string) => {
+      const days = daysBetween(segStart, end);
+      if (days > 0 && principal > 0) {
+        const periodsFraction = round2(days / period.length);
+        const interest = loan.interestType === "FIXED" ? rate * (days / period.length) : (principal * rate * (days / period.length)) / 100;
+        segments.push({ from: toISODate(segStart), to: toISODate(end), days, periods: periodsFraction, principal, interest: round2(interest), event });
+      }
+      segStart = end;
+    };
+    while (idx < events.length && events[idx].date <= period.end && events[idx].date > segStart) {
+      emit(events[idx].date, events[idx].label);
+      principal = Math.max(0, principal + events[idx].delta);
+      idx++;
+    }
+    emit(period.end, period.complete ? "Period completed" : "Current period accruing (not yet complete)");
   }
 
   return segments;
@@ -745,13 +869,7 @@ export function getDashboardStats(loans: Loan[], payments: Payment[], customerCo
     s.interestEarned += b.interestAccrued;
     s.interestPending += b.interestRemaining;
     if (st === "OVERDUE") {
-      // What's actually "overdue" depends on WHY this loan is flagged that
-      // way (mirrors getLoanStatus's own check order): once the loan's own
-      // final due date has passed, the whole remaining balance — principal
-      // included — is now due, not just interest. Before that, the loan's
-      // term itself isn't up yet; only a missed periodic interest cycle is
-      // late, so the principal isn't part of what's overdue.
-      s.overdueAmount += parseDate(loan.dueDate) < t0 ? b.totalOutstanding : b.interestPendingWhole;
+      s.overdueAmount += overdueAmount(loan, b, t0);
       s.overdueLoans++;
     } else if (st === "PAID") {
       s.paidLoans++;

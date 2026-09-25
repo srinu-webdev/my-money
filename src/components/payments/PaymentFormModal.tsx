@@ -38,6 +38,10 @@ function PaymentFormContent({ payment, defaultLoanId, defaultCustomerId, default
   const [amount, setAmount] = useState(String(payment?.amount ?? ""));
   const [paymentDate, setPaymentDate] = useState(payment?.paymentDate ?? todayStr());
   const [allocation, setAllocation] = useState<AllocationMode>(editing ? "custom" : defaultAllocation ?? "interest_principal");
+  // Tracks whether the admin has deliberately touched the allocation
+  // dropdown, so the loan-type-aware default below never clobbers a
+  // conscious choice — only ever applies before the admin has picked one.
+  const [allocationTouched, setAllocationTouched] = useState(false);
   const [customInterest, setCustomInterest] = useState(String(payment?.interestAmount ?? ""));
   const [customPrincipal, setCustomPrincipal] = useState(String(payment?.principalAmount ?? ""));
 
@@ -62,6 +66,19 @@ function PaymentFormContent({ payment, defaultLoanId, defaultCustomerId, default
       if (cancelled) return;
       setLoanDetail(r);
       if (r && customerId !== r.loan.customerId) setCustomerId(r.loan.customerId);
+      // For an "Interest Only" loan, default a NEW payment's allocation to
+      // "Interest Only" rather than the generic "Interest + Principal"
+      // waterfall — an admin recording a routine payment on this loan type
+      // overwhelmingly means "this is the interest," and if the amount
+      // they type doesn't land exactly on the interest owed (very common —
+      // e.g. a round ₹2,000 when ₹1,933.33 was actually due), the
+      // waterfall default silently rolls the difference into principal.
+      // That's correct behavior FOR that mode, but the wrong mode to have
+      // landed in unintentionally. Never overrides a choice the admin has
+      // already made (allocationTouched).
+      if (r && !editing && !allocationTouched && r.loan.repaymentType === "Interest Only") {
+        setAllocation("interest");
+      }
     })();
     return () => {
       cancelled = true;
@@ -183,7 +200,13 @@ function PaymentFormContent({ payment, defaultLoanId, defaultCustomerId, default
             </Select>
           </FormGroup>
           <FormGroup label="Payment Allocation">
-            <Select value={allocation} onChange={(e) => setAllocation(e.target.value as AllocationMode)}>
+            <Select
+              value={allocation}
+              onChange={(e) => {
+                setAllocation(e.target.value as AllocationMode);
+                setAllocationTouched(true);
+              }}
+            >
               {ALLOC_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}

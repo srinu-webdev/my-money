@@ -1,5 +1,5 @@
 import { addDays, businessNow, parseDate, startOfDay } from "./dates";
-import { calculateLoanBalance, getLoanStatus } from "./calculations";
+import { calculateLoanBalance, effectiveDisbursements, getLoanStatus, overdueAmount } from "./calculations";
 import type { Customer, Disbursement, Loan, Payment } from "./types";
 
 export type ReportRangeKey = "today" | "7d" | "30d" | "this-month" | "last-month" | "this-year" | "all" | "custom";
@@ -104,13 +104,7 @@ export function computeReport(loans: Loan[], payments: Payment[], customers: Cus
     interestPending += bal.interestRemaining;
     principalOutstanding += bal.principalRemaining;
     if (st === "OVERDUE") {
-      // What's actually overdue depends on WHY this loan is flagged that
-      // way (mirrors getLoanStatus's own check order): once the loan's own
-      // final due date has passed, the whole remaining balance — principal
-      // included — is now due. Before that, the loan's term itself isn't
-      // up yet; only a missed periodic interest cycle is late, so the
-      // principal isn't part of what's overdue.
-      overdue += parseDate(l.dueDate) < businessNow() ? bal.totalOutstanding : bal.interestPendingWhole;
+      overdue += overdueAmount(l, bal, businessNow());
       overdueCount++;
     }
   }
@@ -119,10 +113,16 @@ export function computeReport(loans: Loan[], payments: Payment[], customers: Cus
   // disbursement (initial or a later tranche) whose date falls in range,
   // not just loans that were first created in range. A loan created last
   // month with a second tranche given out this month correctly counts
-  // that tranche as lent this month.
-  const lentInRange = disbursements.length
-    ? disbursements.filter((d) => active.some((l) => l.id === d.loanId) && inRange(d.date, range))
-    : lentLoans.map((l) => ({ amount: l.principal, loanId: l.id }));
+  // that tranche as lent this month. Falls back PER LOAN (via
+  // effectiveDisbursements, same as calculateLoanBalance's totalDisbursed)
+  // to a single synthesized handover of the full principal on the start
+  // date for any loan without its own Disbursement rows — never a single
+  // system-wide check, which would zero out every disbursement-less
+  // loan's contribution the moment ANY other loan in the database has a
+  // real Disbursement row.
+  const lentInRange = active
+    .flatMap((l) => effectiveDisbursements(l, disbursementsByLoan.get(l.id)))
+    .filter((d) => inRange(d.date, range));
 
   return {
     range,

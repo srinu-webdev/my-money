@@ -4,7 +4,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { LoanStatusDoughnut, useChartColors } from "@/components/charts/Charts";
 import { formatCurrency } from "@/lib/format";
 
-const SEGMENTS = ["Active", "Partially Paid", "Paid", "Overdue"] as const;
+const SEGMENTS = ["Active", "Partially Paid", "Completed", "Overdue"] as const;
 
 export function LoanPortfolio({
   className,

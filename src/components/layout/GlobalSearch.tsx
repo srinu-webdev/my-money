@@ -14,7 +14,6 @@ export function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const boxRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -37,19 +36,34 @@ export function GlobalSearch() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  function onChange(v: string) {
-    setQuery(v);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!v.trim()) {
-      setResults([]);
-      setOpen(false);
-      return;
-    }
-    debounceRef.current = setTimeout(async () => {
-      const r = await globalSearchAction(v);
+  // Debounced search whenever the query changes. Mirrors the `cancelled`
+  // guard used elsewhere (e.g. PaymentFormModal's loan-detail effect): the
+  // cleanup cancels both the pending timer and any in-flight request from
+  // this run, so a slow older response can never overwrite a newer one.
+  // Clearing on an EMPTY query happens in handleQueryChange below instead
+  // of here, so this effect never calls setState synchronously in its own
+  // body — only from the debounced async callback.
+  useEffect(() => {
+    if (!query.trim()) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const r = await globalSearchAction(query);
+      if (cancelled) return;
       setResults(r);
       setOpen(true);
     }, 220);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    if (!value.trim()) {
+      setResults([]);
+      setOpen(false);
+    }
   }
 
   function go(r: SearchResult) {
@@ -70,7 +84,7 @@ export function GlobalSearch() {
       <input
         id="global-search-input"
         value={query}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => handleQueryChange(e.target.value)}
         onFocus={() => query && setOpen(true)}
         placeholder="Search customers, loans, payments…"
         autoComplete="off"

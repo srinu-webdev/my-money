@@ -11,6 +11,7 @@ import { usePaymentFormModal } from "@/components/payments/PaymentFormModal";
 import { SendReminderButton } from "@/components/loans/ReminderFormModal";
 import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/dates";
+import { pendingInterestCaption } from "@/lib/calculations";
 import type { LoanRow } from "@/lib/queries";
 import type { Customer } from "@/lib/types";
 
@@ -80,7 +81,12 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
               // this identical to before for every already-overdue loan.
               const pendingWhole = l.balance.interestPendingWhole > 0.01 ? l.balance.interestPendingWhole : l.balance.interestPendingWholeRaw;
               const inGrace = l.balance.interestPendingWhole <= 0.01 && l.balance.interestPendingWholeRaw > 0.01;
-              const overdueMonths = Math.round(pendingWhole / (l.balance.interestPerPeriod || pendingWhole || 1));
+              // Shared with the Loans table, customer loan list, and loan
+              // detail page — see pendingInterestCaption's own comment for
+              // why this must never show for a loan that isn't genuinely
+              // flagged Overdue (e.g. one that's PAID in aggregate despite a
+              // small strict-per-cycle-matching residual).
+              const overdueCaption = pendingInterestCaption(l.derivedStatus, l.balance);
               return (
                 <tr key={l.id} className={pendingWhole > 0.01 ? (inGrace ? "bg-warning-light/30" : "bg-danger-light/30") : daysUntil === 0 ? "bg-warning-light/30" : "hover:bg-surface-2"}>
                   <Td>
@@ -105,9 +111,9 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
                         Due {formatDate(l.balance.currentPeriodStart)}
                         <div className="text-xs font-normal text-text-tertiary">Not yet flagged overdue</div>
                       </>
-                    ) : pendingWhole > 0.01 ? (
+                    ) : overdueCaption ? (
                       <>
-                        {overdueMonths === 1 ? "Overdue – This Month Interest" : `Overdue – Last ${overdueMonths} Months Interest`}
+                        {overdueCaption}
                         <div className="text-xs font-normal text-text-tertiary">
                           <StatusBadge status={l.derivedStatus} />
                         </div>

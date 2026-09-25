@@ -11,7 +11,7 @@ import { FormGroup, Input, Select, Textarea } from "@/components/ui/Field";
 import { createLoanAction, updateLoanAction } from "@/lib/actions/loans";
 import { getLoanFormDefaultsAction } from "@/lib/actions/options";
 import type { Customer, InterestFrequency, InterestType, Loan } from "@/lib/types";
-import { FREQ_LABEL, FREQ_NOUN, FREQUENCY_DAYS } from "@/lib/calculations";
+import { FREQ_LABEL, FREQ_NOUN, calculateInterestForLoan } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 import { addMonths, businessNow, daysBetween, formatDate, todayStr, toISODate } from "@/lib/dates";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
@@ -98,13 +98,21 @@ function LoanFormContent({
     // everyone, and never hardcode a percentage anywhere downstream.
     const perPeriod = interestType === "FIXED" ? r : (p * r) / 100;
     const days = startDate && dueDate ? daysBetween(startDate, dueDate) : 0;
-    // Worst-case projection to the due date, rounded up to whole periods
-    // — the live engine (calculations.ts) is more precise (a completed
-    // period is owed in full, the one still running accrues gradually),
-    // but by the due date the term has almost always completed every
-    // period anyway, so this stays a fair "what you'll owe by then" estimate.
-    const periods = days > 0 ? Math.ceil(days / FREQUENCY_DAYS[interestFrequency]) : 0;
-    return { perPeriod, days, periods, total: p + perPeriod * periods };
+    // Projected interest by the due date, from the SAME engine that will
+    // actually calculate it once the loan exists (calculateInterestForLoan)
+    // — not a separate, simplified days/30 formula, which silently
+    // over/under-counts real calendar months and could show a projection
+    // here that the loan will never actually accrue.
+    const projectedInterest =
+      days > 0
+        ? calculateInterestForLoan(
+            { principal: p, startDate, interestRate: r, interestType, interestFrequency, status: "ACTIVE", cancelledAt: null, paidAt: null },
+            dueDate,
+            []
+          )
+        : 0;
+    const periods = perPeriod > 0 ? Math.round(projectedInterest / perPeriod) : 0;
+    return { perPeriod, days, periods, projectedInterest, total: p + projectedInterest };
   }, [principal, interestRate, interestType, interestFrequency, startDate, dueDate]);
 
   const repaymentNote = useMemo(() => {
@@ -119,7 +127,7 @@ function LoanFormContent({
       case "Daily Installment": {
         if (preview.days <= 0) return "Daily Installment: set a due date after the start date to calculate the daily amount.";
         const dailyAmount = preview.total / preview.days;
-        return `Daily Installment: from ${formatDate(startDate)} to ${formatDate(dueDate)} (${preview.days} days), collect ${formatCurrency(dailyAmount)} every single day to fully close this loan — ${prin} principal + ${formatCurrency(preview.perPeriod * preview.periods)} projected interest = ${formatCurrency(preview.total)} total, spread evenly. This ${formatCurrency(dailyAmount)}/day figure is specific to this loan's own amount and term — a different principal or a shorter/longer term will always need a different daily amount.`;
+        return `Daily Installment: from ${formatDate(startDate)} to ${formatDate(dueDate)} (${preview.days} days), collect ${formatCurrency(dailyAmount)} every single day to fully close this loan — ${prin} principal + ${formatCurrency(preview.projectedInterest)} projected interest = ${formatCurrency(preview.total)} total, spread evenly. This ${formatCurrency(dailyAmount)}/day figure is specific to this loan's own amount and term — a different principal or a shorter/longer term will always need a different daily amount.`;
       }
       default:
         return `Custom plan: interest still accrues at ${per} every ${freqWord} regardless of the collection schedule you agree with the customer.`;
@@ -276,7 +284,7 @@ function LoanFormContent({
                 ) : null}
                 {repaymentNote ? <div className="text-xs mt-2 pt-2 border-t border-primary-200/60 leading-relaxed">{repaymentNote}</div> : null}
                 <div className="text-xs mt-1.5 opacity-80">
-                  Projected interest till due date (if no principal is repaid early): <strong>{formatCurrency(preview.perPeriod * preview.periods)}</strong> · Total payable ≈{" "}
+                  Projected interest till due date (if no principal is repaid early): <strong>{formatCurrency(preview.projectedInterest)}</strong> · Total payable ≈{" "}
                   <strong>{formatCurrency(preview.total)}</strong>
                 </div>
               </>

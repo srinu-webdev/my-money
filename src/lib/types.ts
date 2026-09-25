@@ -43,6 +43,8 @@ export interface Loan {
   repaymentType: string;
   status: LoanStoredStatus;
   cancelledAt: string | null;
+  /** Set the moment the loan first became fully settled — freezes interest accrual, same role as cancelledAt for a cancelled loan. */
+  paidAt: string | null;
   // Overrides the recurring monthly collection day (1-31) — null means
   // "use startDate's own day-of-month", the common case.
   collectionDay: number | null;

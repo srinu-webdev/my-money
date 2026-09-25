@@ -11,7 +11,7 @@ import { ActivityList } from "@/components/dashboard/ActivityList";
 import { CustomerPaymentCalendar } from "./CustomerPaymentCalendar";
 import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/dates";
-import { FREQ_LABEL, nextMonthlyCollectionDate } from "@/lib/calculations";
+import { FREQ_LABEL, nextMonthlyCollectionDate, pendingInterestCaption } from "@/lib/calculations";
 import type { CustomerRow, LoanRow } from "@/lib/queries";
 import type { Activity, Payment } from "@/lib/types";
 import { CreditCard, Percent, Wallet } from "@/components/ui/icons";
@@ -214,17 +214,8 @@ export function CustomerDetailTabs({ customer, loans, payments, activities }: { 
                     <Td className="hidden lg:table-cell text-right">
                       <span className="inline-flex items-baseline gap-1.5">
                         <span className="mono-nums">{formatCurrency(l.balance.interestAccrued)}</span>
-                        {l.balance.interestPendingWhole > 0.01 ? (
-                          <span className="text-xs font-normal text-warning-dark">
-                            {/* interestPerPeriod is on the current outstanding principal — 0 once
-                                it's fully repaid, even if an older interest cycle is still unpaid.
-                                No rate basis left to recover a real month count from then. */}
-                            · {l.balance.interestPerPeriod <= 0
-                              ? "Overdue – Interest Pending"
-                              : Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod) === 1
-                                ? "Overdue – This Month Interest"
-                                : `Overdue – Last ${Math.round(l.balance.interestPendingWhole / l.balance.interestPerPeriod)} Months Interest`}
-                          </span>
+                        {pendingInterestCaption(l.derivedStatus, l.balance) ? (
+                          <span className="text-xs font-normal text-warning-dark">· {pendingInterestCaption(l.derivedStatus, l.balance)}</span>
                         ) : l.balance.interestPendingWholeRaw > 0.01 ? (
                           // A just-completed period is unpaid but still inside its 5-day
                           // grace window — show that period's own (already-passed) due

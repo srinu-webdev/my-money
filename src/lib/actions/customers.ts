@@ -6,8 +6,6 @@ import { requireAdminId } from "@/lib/auth";
 import { customerSchema } from "@/lib/validations";
 import { nextId } from "@/lib/ids";
 import { logActivity, pushNotification } from "@/lib/log";
-import { calculateLoanBalance, getLoanStatus } from "@/lib/calculations";
-import { serializeDisbursement, serializeLoan, serializePayment } from "@/lib/serialize";
 import type { ActionResult } from "@/lib/types";
 
 function refresh() {
@@ -17,36 +15,12 @@ function refresh() {
   revalidatePath("/", "layout");
 }
 
-/** Loans that are neither fully paid nor cancelled — blocks a delete. */
-async function countActiveLoans(customerId: string): Promise<number> {
-  const [loans, payments, disbursements] = await Promise.all([
-    prisma.loan.findMany({ where: { customerId } }),
-    prisma.payment.findMany({ where: { customerId } }),
-    prisma.disbursement.findMany({ where: { loan: { customerId } } }),
-  ]);
-  const byLoan = new Map<string, typeof payments>();
-  for (const p of payments) {
-    const arr = byLoan.get(p.loanId) ?? [];
-    arr.push(p);
-    byLoan.set(p.loanId, arr);
-  }
-  const disbByLoan = new Map<string, typeof disbursements>();
-  for (const disb of disbursements) {
-    const arr = disbByLoan.get(disb.loanId) ?? [];
-    arr.push(disb);
-    disbByLoan.set(disb.loanId, arr);
-  }
-  return loans.filter((l) => {
-    const loan = serializeLoan(l);
-    const bal = calculateLoanBalance(
-      loan,
-      (byLoan.get(l.id) ?? []).map(serializePayment),
-      undefined,
-      (disbByLoan.get(l.id) ?? []).map(serializeDisbursement)
-    );
-    const st = getLoanStatus(loan, bal);
-    return st !== "PAID" && st !== "CANCELLED";
-  }).length;
+/** ANY loan at all blocks a hard delete — even a fully paid-off or
+ * cancelled one carries real payment history that Loan's cascade delete
+ * would wipe out permanently. Use "Inactive" status to archive a customer
+ * whose loans are all settled instead of deleting them. */
+async function countLoans(customerId: string): Promise<number> {
+  return prisma.loan.count({ where: { customerId } });
 }
 
 export async function createCustomerAction(input: unknown): Promise<ActionResult<{ id: string }>> {
@@ -109,11 +83,11 @@ export async function updateCustomerAction(id: string, input: unknown): Promise<
 
 export async function deleteCustomerAction(id: string): Promise<ActionResult> {
   await requireAdminId();
-  const active = await countActiveLoans(id);
-  if (active > 0) {
+  const loanCount = await countLoans(id);
+  if (loanCount > 0) {
     return {
       ok: false,
-      error: `This customer has ${active} active loan${active === 1 ? "" : "s"}. Please close or transfer the loans before deleting the customer.`,
+      error: `This customer has ${loanCount} loan${loanCount === 1 ? "" : "s"} on record. Deleting them would permanently erase that payment history — mark the customer Inactive instead, or delete their loan(s) first if you're certain.`,
     };
   }
   const customer = await prisma.customer.findUnique({ where: { id } });
@@ -155,8 +129,8 @@ export async function bulkDeleteCustomersAction(ids: string[]): Promise<ActionRe
   const blocked: string[] = [];
   const deletable: string[] = [];
   for (const id of ids) {
-    const active = await countActiveLoans(id);
-    if (active > 0) blocked.push(id);
+    const loanCount = await countLoans(id);
+    if (loanCount > 0) blocked.push(id);
     else deletable.push(id);
   }
   if (deletable.length) {

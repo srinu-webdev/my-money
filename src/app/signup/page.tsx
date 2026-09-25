@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "@/components/ui/icons";
 import { getCurrentAdmin } from "@/lib/queries";
+import { prisma } from "@/lib/db";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { AuthSidePanel } from "@/components/auth/AuthSidePanel";
 
@@ -10,6 +11,11 @@ export const metadata = { title: "Create Account — LendPro" };
 export default async function SignupPage() {
   const admin = await getCurrentAdmin();
   if (admin) redirect("/dashboard");
+  // Signup only ever bootstraps the first admin account — see signupAction
+  // for why. Redirect straight to login rather than showing a form that
+  // the action would reject anyway.
+  const adminCount = await prisma.admin.count();
+  if (adminCount > 0) redirect("/login");
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">

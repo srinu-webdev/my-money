@@ -17,7 +17,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { StatCard } from "@/components/ui/StatCard";
 import { usePagination } from "@/lib/hooks/useTableState";
 import { formatCurrency } from "@/lib/format";
-import { businessToday, formatDate } from "@/lib/dates";
+import { businessNow, businessToday, formatDate } from "@/lib/dates";
+import { overdueAmount } from "@/lib/calculations";
 import type { LoanRow } from "@/lib/queries";
 import type { Customer } from "@/lib/types";
 import { usePaymentFormModal } from "@/components/payments/PaymentFormModal";
@@ -49,7 +50,7 @@ export function OverdueTable({ loans, customers }: { loans: LoanRow[]; customers
   // principal included — is now due. Before that, the loan's term itself
   // isn't up yet; only a missed periodic interest cycle is late, so the
   // principal isn't part of what's overdue.
-  const totalOverdueAmount = overdue.reduce((s, l) => s + (l.dueDate < businessToday() ? l.balance.totalOutstanding : l.balance.interestPendingWhole), 0);
+  const totalOverdueAmount = overdue.reduce((s, l) => s + overdueAmount(l, l.balance, businessNow()), 0);
 
   const filtered = useMemo(() => {
     let list = overdue;

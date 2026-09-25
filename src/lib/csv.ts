@@ -8,7 +8,12 @@ export function exportCSV(filename: string, headers: string[], rows: (string | n
     return;
   }
   const escapeCell = (v: string | number) => {
-    const s = v === null || v === undefined ? "" : String(v);
+    let s = v === null || v === undefined ? "" : String(v);
+    // CSV/formula injection guard: a cell starting with =, +, -, or @ can
+    // execute as a formula when the file is opened in Excel/Sheets. A
+    // leading apostrophe forces spreadsheet apps to treat it as literal
+    // text without changing what a plain CSV reader sees.
+    if (/^[=+\-@]/.test(s)) s = `'${s}`;
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const csv = "﻿" + [headers.map(escapeCell).join(","), ...rows.map((r) => r.map(escapeCell).join(","))].join("\r\n");

@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Info, Trash } from "@/components/ui/icons";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useModal } from "@/components/providers/ModalProvider";
 import { Button } from "./Button";
 import { ModalFooter } from "./Modal";
@@ -60,6 +60,20 @@ export function useAlert() {
 }
 
 function ConfirmBody({ opts, tone, Icon, closeModal }: { opts: ConfirmOptions; tone: Tone; Icon: typeof Trash; closeModal: () => void }) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleConfirm() {
+    setIsSubmitting(true);
+    try {
+      await opts.onConfirm();
+      // Only close on success — if onConfirm() throws, leave the dialog
+      // open so the user sees the error state and can retry.
+      closeModal();
+    } catch {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <>
       <div className="px-6 pt-7 pb-2">
@@ -71,15 +85,10 @@ function ConfirmBody({ opts, tone, Icon, closeModal }: { opts: ConfirmOptions; t
         {opts.extra}
       </div>
       <ModalFooter>
-        <Button variant="ghost" onClick={closeModal}>
+        <Button variant="ghost" onClick={closeModal} disabled={isSubmitting}>
           {opts.cancelText ?? "Cancel"}
         </Button>
-        <Button
-          variant={tone === "danger" ? "danger" : "primary"}
-          onClick={async () => {
-            await opts.onConfirm();
-          }}
-        >
+        <Button variant={tone === "danger" ? "danger" : "primary"} loading={isSubmitting} onClick={handleConfirm}>
           {opts.confirmText ?? "Confirm"}
         </Button>
       </ModalFooter>

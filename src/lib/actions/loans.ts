@@ -8,7 +8,7 @@ import { nextId } from "@/lib/ids";
 import { logActivity, pushNotification } from "@/lib/log";
 import { calculateLoanBalance } from "@/lib/calculations";
 import { isoToDbDate, serializeDisbursement, serializeLoan, serializePayment } from "@/lib/serialize";
-import { todayStr } from "@/lib/dates";
+import { todayStr, toISODate, parseDate, businessNow } from "@/lib/dates";
 import type { ActionResult } from "@/lib/types";
 
 function refresh() {
@@ -84,6 +84,22 @@ export async function updateLoanAction(id: string, input: unknown): Promise<Acti
   const customer = await prisma.customer.findUnique({ where: { id: d.customerId } });
   if (!customer) return { ok: false, error: "Please select a valid customer." };
 
+  // Nothing about a loan's terms is versioned — changing any of these
+  // after payments already exist recalculates interest for cycles the
+  // customer may have already settled under the old terms (the form warns
+  // about this). Recording the actual before/after here, instead of just
+  // "Loan updated", is the only trace of what changed and by how much.
+  const changes: string[] = [];
+  if (existing.principal.toNumber() !== d.principal) {
+    changes.push(`principal ₹${existing.principal.toNumber().toLocaleString("en-IN")} → ₹${d.principal.toLocaleString("en-IN")}`);
+  }
+  if (existing.interestRate.toNumber() !== d.interestRate) changes.push(`rate ${existing.interestRate.toNumber()} → ${d.interestRate}`);
+  if (existing.interestType !== d.interestType) changes.push(`interest type ${existing.interestType} → ${d.interestType}`);
+  if (existing.interestFrequency !== d.interestFrequency) changes.push(`frequency ${existing.interestFrequency} → ${d.interestFrequency}`);
+  const existingStartDate = toISODate(existing.startDate);
+  if (existingStartDate !== d.startDate) changes.push(`start date ${existingStartDate} → ${d.startDate}`);
+  const changeSummary = changes.length ? ` (${changes.join(", ")})` : "";
+
   await prisma.$transaction(async (tx) => {
     await tx.loan.update({
       where: { id },
@@ -107,14 +123,15 @@ export async function updateLoanAction(id: string, input: unknown): Promise<Acti
         // Editing the terms of a previously-closed loan back into having a
         // balance reopens it — status is re-derived on next read anyway,
         // but keep the stored flag consistent for the few places that
-        // read it directly (e.g. bulk filters).
-        ...(existing.status === "PAID" ? { status: "ACTIVE" as const } : {}),
+        // read it directly (e.g. bulk filters). Clearing paidAt resumes
+        // accrual, matching the reopened ACTIVE status.
+        ...(existing.status === "PAID" ? { status: "ACTIVE" as const, paidAt: null } : {}),
       },
     });
     if (existing.customerId !== d.customerId) {
       await tx.payment.updateMany({ where: { loanId: id }, data: { customerId: d.customerId } });
     }
-    await logActivity(tx, "loan_edited", `Loan ${id} updated`, { customerId: d.customerId, loanId: id });
+    await logActivity(tx, "loan_edited", `Loan ${id} updated${changeSummary}`, { customerId: d.customerId, loanId: id });
   });
   refresh();
   return { ok: true, data: undefined };
@@ -124,6 +141,18 @@ export async function deleteLoanAction(id: string): Promise<ActionResult> {
   await requireAdminId();
   const loan = await prisma.loan.findUnique({ where: { id } });
   if (!loan) return { ok: false, error: "Loan not found." };
+  // A loan's Payment/Disbursement rows cascade-delete with it — blocking
+  // this once real payments exist prevents a paid-off, multi-year loan's
+  // entire collection history from being wiped out irrecoverably. Use
+  // Cancel for a loan that's genuinely done with; Delete stays available
+  // for a loan created by mistake before anything was ever collected.
+  const paymentCount = await prisma.payment.count({ where: { loanId: id } });
+  if (paymentCount > 0) {
+    return {
+      ok: false,
+      error: `This loan has ${paymentCount} recorded payment${paymentCount === 1 ? "" : "s"} — deleting it would permanently erase that history. Cancel the loan instead.`,
+    };
+  }
   await prisma.$transaction(async (tx) => {
     const customer = await tx.customer.findUnique({ where: { id: loan.customerId } });
     await tx.loan.delete({ where: { id } }); // cascades to payments
@@ -152,7 +181,7 @@ export async function closeLoanAction(id: string): Promise<ActionResult> {
     };
   }
   await prisma.$transaction(async (tx) => {
-    await tx.loan.update({ where: { id }, data: { status: "PAID" } });
+    await tx.loan.update({ where: { id }, data: { status: "PAID", paidAt: isoToDbDate(todayStr()) } });
     await logActivity(tx, "loan_closed", `Loan ${id} closed — fully paid`, { customerId: loan.customerId, loanId: id });
     await pushNotification(tx, "paid", `Loan ${id} fully paid and closed`);
   });
@@ -200,8 +229,18 @@ export async function addDisbursementAction(loanId: string, input: unknown): Pro
   const loan = await prisma.loan.findUnique({ where: { id: loanId } });
   if (!loan) return { ok: false, error: "Loan not found." };
   if (loan.status === "CANCELLED") return { ok: false, error: "This loan is cancelled — it can't receive further disbursements." };
-  if (d.date < loan.startDate.toISOString().slice(0, 10)) {
+  if (d.date < toISODate(loan.startDate)) {
     return { ok: false, error: "Disbursement date can't be before the loan's start date." };
+  }
+  // calculateLoanBalance's totalDisbursed/pendingDisbursement sum every
+  // Disbursement row unconditionally (no date filtering — it's built on
+  // the assumption that a row existing means the money was ALREADY handed
+  // over). A future-dated row would break that: it'd count as disbursed
+  // today (inflating principalRemaining/totalOutstanding) while the
+  // interest engine correctly won't accrue on it yet, producing numbers
+  // that visibly disagree with each other.
+  if (parseDate(d.date) > businessNow()) {
+    return { ok: false, error: "Disbursement date cannot be in the future." };
   }
 
   const existing = await prisma.disbursement.findMany({ where: { loanId } });
@@ -222,9 +261,10 @@ export async function addDisbursementAction(loanId: string, input: unknown): Pro
       data: { id, loanId, amount: d.amount, date: isoToDbDate(d.date), notes: d.notes || null },
     });
     // A loan that had been fully disbursed and is being topped back up
-    // should read as active again, not still show as paid/closed.
+    // should read as active again, not still show as paid/closed —
+    // clearing paidAt resumes accrual on the newly-added amount.
     if (loan.status === "PAID") {
-      await tx.loan.update({ where: { id: loanId }, data: { status: "ACTIVE" } });
+      await tx.loan.update({ where: { id: loanId }, data: { status: "ACTIVE", paidAt: null } });
     }
     await logActivity(tx, "loan_edited", `₹${d.amount.toLocaleString("en-IN")} disbursed on loan ${loanId} for ${customer?.name ?? "customer"}`, {
       customerId: loan.customerId,
@@ -252,13 +292,19 @@ export async function deleteDisbursementAction(disbursementId: string): Promise<
   return { ok: true, data: undefined };
 }
 
-export async function bulkDeleteLoansAction(ids: string[]): Promise<ActionResult<{ count: number }>> {
+export async function bulkDeleteLoansAction(ids: string[]): Promise<ActionResult<{ deleted: number; blocked: number }>> {
   await requireAdminId();
-  if (!ids.length) return { ok: true, data: { count: 0 } };
-  await prisma.$transaction(async (tx) => {
-    await tx.loan.deleteMany({ where: { id: { in: ids } } }); // cascades to payments
-    await logActivity(tx, "loan_deleted", `${ids.length} loan(s) deleted in bulk`);
-  });
+  if (!ids.length) return { ok: true, data: { deleted: 0, blocked: 0 } };
+  const paymentCounts = await prisma.payment.groupBy({ by: ["loanId"], where: { loanId: { in: ids } }, _count: true });
+  const withPayments = new Set(paymentCounts.map((p) => p.loanId));
+  const deletable = ids.filter((id) => !withPayments.has(id));
+  const blocked = ids.length - deletable.length;
+  if (deletable.length) {
+    await prisma.$transaction(async (tx) => {
+      await tx.loan.deleteMany({ where: { id: { in: deletable } } }); // cascades to payments/disbursements (none exist for these)
+      await logActivity(tx, "loan_deleted", `${deletable.length} loan(s) deleted in bulk`);
+    });
+  }
   refresh();
-  return { ok: true, data: { count: ids.length } };
+  return { ok: true, data: { deleted: deletable.length, blocked } };
 }

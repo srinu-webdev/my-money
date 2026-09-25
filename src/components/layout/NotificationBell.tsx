@@ -25,6 +25,16 @@ export function NotificationBell({ notifications, unreadCount }: { notifications
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  // This component only ever reflects the `notifications`/`unreadCount`
+  // props handed down from the dashboard layout Server Component, which
+  // otherwise only re-fetches on navigation or an explicit router.refresh()
+  // elsewhere. Poll every 45s so a new notification's badge shows up for an
+  // idle admin without them having to click anything.
+  useEffect(() => {
+    const interval = setInterval(() => router.refresh(), 45_000);
+    return () => clearInterval(interval);
+  }, [router]);
+
   function openNotif(n: Notification) {
     setOpen(false);
     if (!n.read) startTransition(async () => { await markNotificationReadAction(n.id); router.refresh(); });

@@ -19,7 +19,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { usePagination, useSort } from "@/lib/hooks/useTableState";
 import { formatCurrency } from "@/lib/format";
 import { businessToday, formatDate } from "@/lib/dates";
-import { FREQ_LABEL, STATUS_LABEL, nextMonthlyCollectionDate } from "@/lib/calculations";
+import { FREQ_LABEL, STATUS_LABEL, nextMonthlyCollectionDate, pendingInterestCaption } from "@/lib/calculations";
 import type { LoanRow } from "@/lib/queries";
 import type { LoanStatus } from "@/lib/types";
 import { cancelLoanAction, closeLoanAction, deleteLoanAction, reactivateLoanAction } from "@/lib/actions/loans";
@@ -32,7 +32,7 @@ const FILTERS: { key: LoanStatus | "all"; label: string }[] = [
   { key: "all", label: "All" },
   { key: "ACTIVE", label: "Active" },
   { key: "PARTIALLY_PAID", label: "Partially Paid" },
-  { key: "PAID", label: "Paid" },
+  { key: "PAID", label: "Completed" },
   { key: "OVERDUE", label: "Overdue" },
   { key: "CANCELLED", label: "Cancelled" },
 ];
@@ -167,6 +167,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                 {pageItems.map((l) => {
                   const b = l.balance;
                   const open = l.derivedStatus !== "PAID" && l.derivedStatus !== "CANCELLED";
+                  const overdueCaption = pendingInterestCaption(l.derivedStatus, b);
                   return (
                     <tr key={l.id} className={l.derivedStatus === "OVERDUE" ? "bg-danger-light/30 hover:bg-danger-light/50" : "hover:bg-surface-2"}>
                       <Td>
@@ -188,17 +189,9 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                       <Td className="hidden md:table-cell text-text-secondary">{formatDate(l.startDate)}</Td>
                       <Td className="hidden lg:table-cell text-right">
                         <div className="mono-nums">{formatCurrency(b.interestPerPeriod)}</div>
-                        {b.interestPendingWhole > 0.01 ? (
+                        {overdueCaption ? (
                           <div className="text-xs font-normal text-warning-dark mt-0.5">
-                            {/* interestPerPeriod is on the current outstanding principal — 0 once
-                                it's fully repaid, even if an older interest cycle is still unpaid.
-                                No rate basis left to recover a real month count from then. */}
-                            {b.interestPerPeriod <= 0
-                              ? "Overdue – Interest Pending"
-                              : Math.round(b.interestPendingWhole / b.interestPerPeriod) === 1
-                                ? "Overdue – This Month Interest"
-                                : `Overdue – Last ${Math.round(b.interestPendingWhole / b.interestPerPeriod)} Months Interest`}{" "}
-                            ({formatCurrency(b.interestPendingWhole)})
+                            {overdueCaption} ({formatCurrency(b.interestPendingWhole)})
                           </div>
                         ) : b.interestPendingWholeRaw > 0.01 ? (
                           // A just-completed period is genuinely unpaid but still inside

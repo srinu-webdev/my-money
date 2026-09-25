@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
 import { CheckCircle, Edit, Refresh, Trash, XCircle } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { cancelLoanAction, closeLoanAction, deleteLoanAction, reactivateLoanAction } from "@/lib/actions/loans";
 import { formatCurrency } from "@/lib/format";
@@ -87,7 +88,7 @@ export function LoanDetailActions({ loan, paymentsCount, status }: { loan: Loan;
           <Refresh /> Reactivate
         </Button>
       )}
-      {open && (
+      {open ? (
         <>
           <Button variant="ghost" onClick={handleCancel}>
             <XCircle /> Cancel Loan
@@ -97,7 +98,15 @@ export function LoanDetailActions({ loan, paymentsCount, status }: { loan: Loan;
           </Button>
           <RecordPaymentButton loanId={loan.id} />
         </>
-      )}
+      ) : status === "PAID" ? (
+        // Once fully settled (auto-completed after the final payment, or
+        // manually closed above), the Close Loan button has nothing left
+        // to do — but hiding it with no replacement left this state with
+        // no visible confirmation at all. This is that confirmation.
+        <Badge tone="success">
+          <CheckCircle className="w-3.5 h-3.5" /> Loan Completed
+        </Badge>
+      ) : null}
       <Button variant="ghost-danger" onClick={handleDelete}>
         <Trash />
       </Button>
