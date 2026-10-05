@@ -13,7 +13,7 @@ import { createPaymentAction, updatePaymentAction } from "@/lib/actions/payments
 import { getCustomerOptionsAction, getLoanForPaymentFormAction, getLoanOptionsAction, type LoanOption } from "@/lib/actions/options";
 import { calculateLoanBalance, computeAllocation, getLoanStatus } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
-import { todayStr } from "@/lib/dates";
+import { formatDate, todayStr } from "@/lib/dates";
 import type { AllocationMode, Customer, Disbursement, Loan, Payment, PaymentMethod } from "@/lib/types";
 
 const METHODS: PaymentMethod[] = ["Cash", "UPI", "Bank Transfer", "Cheque", "Other"];
@@ -129,7 +129,15 @@ function PaymentFormContent({ payment, defaultLoanId, defaultCustomerId, default
   }
 
   return (
-    <form action={submit}>
+    // onSubmit, not `action`: a form action makes React reset every field
+    // afterwards, so a server-rejected payment came back with its selects
+    // visually reverted (and an uncontrolled Payment Method silently Cash).
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit(new FormData(e.currentTarget));
+      }}
+    >
       <ModalHeader title={editing ? "Edit Payment" : "Record Payment"} sub={editing ? payment.id : "Collect money against a loan"} onClose={closeModal} />
       <ModalBody>
         {editing ? <div className="bg-info-light text-info-dark dark:text-sky-300 rounded-[10px] px-3.5 py-2.5 text-[13px] mb-4">Editing a payment recalculates all balances for the affected loan automatically.</div> : null}
@@ -178,6 +186,11 @@ function PaymentFormContent({ payment, defaultLoanId, defaultCustomerId, default
                     <div>
                       Total outstanding: <strong>{formatCurrency(alloc.interestRemaining + alloc.principalRemaining)}</strong>
                     </div>
+                    {alloc.currentPeriodEnd ? (
+                      <div className="sm:col-span-3 text-xs opacity-80">
+                        Full interest for the cycle due {formatDate(alloc.currentPeriodEnd)}: <strong>{formatCurrency(alloc.interestPayable)}</strong> — can be collected in advance.
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </>
@@ -253,11 +266,17 @@ function AllocationPreview({ alloc, amount, allocation }: { alloc: ReturnType<ty
   const total = alloc.interestAmount + alloc.principalAmount;
   const mismatch = allocation === "custom" && Math.abs(total - amount) > 0.01;
   const over = allocation !== "custom" && alloc.unallocated > 0.01;
+  const advance = alloc.interestAmount - alloc.interestRemaining;
   const tone = mismatch || over ? (mismatch ? "bg-danger-light text-danger-dark dark:text-red-300" : "bg-warning-light text-warning-dark dark:text-amber-300") : "bg-success-light text-success-dark dark:text-emerald-300";
   return (
     <div className={`sm:col-span-2 rounded-[10px] px-3.5 py-2.5 text-[13px] ${tone}`}>
       Allocation: <strong>{formatCurrency(alloc.interestAmount)}</strong> to interest + <strong>{formatCurrency(alloc.principalAmount)}</strong> to principal
       {mismatch ? ` — must equal payment amount ${formatCurrency(amount)} (difference ${formatCurrency(amount - total)})` : over ? ` — ${formatCurrency(alloc.unallocated)} exceeds the outstanding balance and will not be allocated.` : "."}
+      {advance > 0.01 && alloc.currentPeriodEnd ? (
+        <div className="text-xs mt-1">
+          Includes {formatCurrency(advance)} interest paid in advance for the cycle due {formatDate(alloc.currentPeriodEnd)}.
+        </div>
+      ) : null}
       <div className="text-xs mt-1 opacity-80">
         After payment → principal remaining {formatCurrency(Math.max(0, alloc.principalRemaining - alloc.principalAmount))}, interest remaining {formatCurrency(Math.max(0, alloc.interestRemaining - alloc.interestAmount))}
       </div>

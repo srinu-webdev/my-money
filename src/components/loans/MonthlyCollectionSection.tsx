@@ -11,7 +11,7 @@ import { usePaymentFormModal } from "@/components/payments/PaymentFormModal";
 import { SendReminderButton } from "@/components/loans/ReminderFormModal";
 import { formatCurrency } from "@/lib/format";
 import { formatDate } from "@/lib/dates";
-import { pendingInterestCaption } from "@/lib/calculations";
+import { pendingInterestCaption, round2 } from "@/lib/calculations";
 import type { LoanRow } from "@/lib/queries";
 import type { Customer } from "@/lib/types";
 
@@ -24,6 +24,11 @@ export interface MonthlyDueItem {
   loan: LoanRow;
   nextDueDate: string; // ISO date of the next occurrence of the collection day
   daysUntil: number; // 0 = today, negative not used (wraps to next month)
+}
+
+function upcomingLeft(l: LoanRow): number {
+  const c = l.balance.currentCycle;
+  return c ? Math.max(0, round2(c.amount - c.paid)) : l.balance.interestPerPeriod;
 }
 
 export function MonthlyCollectionSection({ items, customers }: { items: MonthlyDueItem[]; customers: Map<string, Customer> }) {
@@ -39,8 +44,9 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
   // cycle), so it could never land in dueToday/upcoming on its own.
   const overdue = items.filter((i) => i.loan.balance.interestPendingWholeRaw > 0.01);
   const dueToday = items.filter((i) => i.loan.balance.interestPendingWholeRaw <= 0.01 && i.daysUntil === 0);
+  // A cycle already paid in advance has nothing left to collect.
   const upcoming = items
-    .filter((i) => i.loan.balance.interestPendingWholeRaw <= 0.01 && i.daysUntil > 0 && i.daysUntil <= 5)
+    .filter((i) => i.loan.balance.interestPendingWholeRaw <= 0.01 && i.daysUntil > 0 && i.daysUntil <= 5 && upcomingLeft(i.loan) > 1)
     .sort((a, b) => a.daysUntil - b.daysUntil);
   const rows = [...overdue, ...dueToday, ...upcoming];
   if (!rows.length) return null;
@@ -104,7 +110,7 @@ export function MonthlyCollectionSection({ items, customers }: { items: MonthlyD
                     </Link>
                   </Td>
                   <Td className="hidden sm:table-cell text-text-secondary">{inGrace ? formatDate(l.balance.currentPeriodStart) : formatDate(nextDueDate)}</Td>
-                  <Td className="text-right font-bold mono-nums">{formatCurrency(pendingWhole > 0.01 ? pendingWhole : l.balance.interestPerPeriod)}</Td>
+                  <Td className="text-right font-bold mono-nums">{formatCurrency(pendingWhole > 0.01 ? pendingWhole : daysUntil > 0 ? upcomingLeft(l) : l.balance.interestPerPeriod)}</Td>
                   <Td className={pendingWhole > 0.01 ? (inGrace ? "text-warning-dark font-semibold" : "text-danger font-semibold") : daysUntil === 0 ? "text-warning-dark font-semibold" : "text-text-secondary"}>
                     {inGrace ? (
                       <>

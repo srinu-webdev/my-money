@@ -173,6 +173,10 @@ export interface LoanBalance {
   // (the loan's lifetime total). `interestPerPeriod` is what's due for
   // this same period, so the two together read as "paid X of Y this month".
   interestPaidThisPeriod: number;
+  // MONTHLY loans only: the cycle still running today (due on `end`), and
+  // how much of its interest payments have already covered — so a cycle
+  // paid a few days early isn't listed as still to collect.
+  currentCycle: { end: string; amount: number; paid: number } | null;
 }
 
 export interface LoanWithBalance extends Loan {

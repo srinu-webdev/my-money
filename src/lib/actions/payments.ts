@@ -69,8 +69,8 @@ function validateAllocation(
     if (a.principalAmount > a.principalRemaining + 0.01) {
       return `Principal portion (${formatCurrency(a.principalAmount)}) exceeds principal outstanding (${formatCurrency(a.principalRemaining)}).`;
     }
-    if (a.interestAmount > a.interestRemaining + 0.01) {
-      return `Interest portion (${formatCurrency(a.interestAmount)}) exceeds interest outstanding (${formatCurrency(a.interestRemaining)}).`;
+    if (a.interestAmount > a.interestPayable + 0.01) {
+      return `Interest portion (${formatCurrency(a.interestAmount)}) exceeds the interest payable for this cycle (${formatCurrency(a.interestPayable)}).`;
     }
   } else {
     if (a.interestAmount + a.principalAmount <= 0) return "Nothing is outstanding for the selected allocation. Choose a different allocation.";

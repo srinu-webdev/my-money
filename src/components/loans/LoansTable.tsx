@@ -18,7 +18,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { usePagination, useSort } from "@/lib/hooks/useTableState";
 import { formatCurrency } from "@/lib/format";
-import { businessToday, formatDate } from "@/lib/dates";
+import { addDays, businessToday, formatDate } from "@/lib/dates";
 import { FREQ_LABEL, STATUS_LABEL, nextMonthlyCollectionDate, pendingInterestCaption } from "@/lib/calculations";
 import type { LoanRow } from "@/lib/queries";
 import type { LoanStatus } from "@/lib/types";
@@ -168,6 +168,9 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                   const b = l.balance;
                   const open = l.derivedStatus !== "PAID" && l.derivedStatus !== "CANCELLED";
                   const overdueCaption = pendingInterestCaption(l.derivedStatus, b);
+                  // This month's cycle already covered (e.g. paid a few days before its due date).
+                  const cycle = b.currentCycle;
+                  const cyclePaid = cycle !== null && cycle.amount > 0.01 && cycle.paid >= cycle.amount - 0.01;
                   return (
                     <tr key={l.id} className={l.derivedStatus === "OVERDUE" ? "bg-danger-light/30 hover:bg-danger-light/50" : "hover:bg-surface-2"}>
                       <Td>
@@ -199,6 +202,10 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                           // would jump straight to NEXT month, silently hiding that this
                           // period's own payment (due on currentPeriodStart) hasn't come in.
                           <div className="text-xs font-normal text-warning-dark mt-0.5">Due {formatDate(b.currentPeriodStart)}</div>
+                        ) : cyclePaid ? (
+                          <div className="text-xs font-semibold text-success-dark mt-0.5">
+                            Paid · next due {formatDate(nextMonthlyCollectionDate(l.startDate, addDays(cycle.end, 1), l.collectionDay).date)}
+                          </div>
                         ) : b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
                           <div className="text-xs font-normal text-text-tertiary mt-0.5">Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
                         ) : null}

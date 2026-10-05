@@ -168,6 +168,8 @@ export interface InterestBreakdown {
   whole: number;
   /** The date the CURRENT (still-running) period began — everything before it is a fully-completed prior period. Used to figure out what's "this month's" interest and payments, separate from the loan's lifetime totals. */
   currentPeriodStart: string;
+  /** Natural end (due date) of the period still running at asOf — null when asOf sits exactly on a boundary, or accrual is frozen (cancelled/paid). */
+  currentPeriodEnd: string | null;
 }
 
 export function calculateInterestBreakdown(
@@ -177,9 +179,11 @@ export function calculateInterestBreakdown(
   disbursements?: DisbursementLike[]
 ): InterestBreakdown {
   let asOf = startOfDay(asOfDate);
+  let frozen = false;
   if (loan.status === "CANCELLED" && loan.cancelledAt) {
     const c = startOfDay(loan.cancelledAt);
     if (c < asOf) asOf = c; // accrual stops at cancellation
+    frozen = true;
   }
   if (loan.status === "PAID" && loan.paidAt) {
     // Same idea as cancellation: once a loan is fully settled, accrual
@@ -190,6 +194,7 @@ export function calculateInterestBreakdown(
     // to OVERDUE with no payment ever having been missed.
     const p = startOfDay(loan.paidAt);
     if (p < asOf) asOf = p;
+    frozen = true;
   }
 
   const rate = Number(loan.interestRate) || 0;
@@ -216,7 +221,7 @@ export function calculateInterestBreakdown(
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const firstDate = events.length ? events[0].date : startOfDay(loan.startDate);
-  if (asOf <= firstDate) return { total: 0, whole: 0, currentPeriodStart: toISODate(firstDate) };
+  if (asOf <= firstDate) return { total: 0, whole: 0, currentPeriodStart: toISODate(firstDate), currentPeriodEnd: null };
 
   // Apply any events dated at/before firstDate up front (e.g. two same-day
   // disbursements) so `bal` starts each period walk already correct.
@@ -239,6 +244,7 @@ export function calculateInterestBreakdown(
   let whole = 0;
   let fractional = 0;
   let currentPeriodStart = firstDate;
+  let currentPeriodEnd: Date | null = null;
   for (const period of periods) {
     let segStart = period.start;
     let periodInterest = 0;
@@ -257,12 +263,15 @@ export function calculateInterestBreakdown(
     if (period.complete) whole += periodInterest;
     else fractional += periodInterest;
     currentPeriodStart = period.complete ? period.end : period.start;
+    // `length` is the period's full natural length even for the running one.
+    currentPeriodEnd = period.complete ? null : addDays(period.start, period.length);
   }
 
   return {
     total: Math.max(0, round2(whole + fractional)),
     whole: Math.max(0, round2(whole)),
     currentPeriodStart: toISODate(currentPeriodStart),
+    currentPeriodEnd: currentPeriodEnd && !frozen ? toISODate(currentPeriodEnd) : null,
   };
 }
 
@@ -347,6 +356,8 @@ export interface MonthlyCycleStatus {
   /** This cycle's due date — also what it's labeled by (e.g. "the October cycle" is the one due in October). */
   end: string;
   amount: number;
+  /** How much of `amount` has been matched by payments so far. */
+  paid: number;
   status: "PAID" | "OVERDUE" | "DUE" | "UPCOMING";
 }
 
@@ -441,7 +452,7 @@ export function monthlyInterestSchedule(
       if (upcomingShown >= upcomingCount) break; // cycles only get later from here — nothing more to show
       upcomingShown++;
     }
-    rows.push({ start: toISODate(cycle.start), end: toISODate(cycle.end), amount: cycle.cost, status });
+    rows.push({ start: toISODate(cycle.start), end: toISODate(cycle.end), amount: cycle.cost, paid: covered, status });
   }
   return rows;
 }
@@ -452,7 +463,10 @@ export function strictCycleGap(
   payments: PaymentLikeInterest[],
   disbursements?: DisbursementLike[]
 ): StrictCycleGap {
-  const rows = monthlyInterestSchedule(loan, asOfDate, payments, disbursements, 0);
+  return gapFromSchedule(monthlyInterestSchedule(loan, asOfDate, payments, disbursements, 0));
+}
+
+function gapFromSchedule(rows: MonthlyCycleStatus[]): StrictCycleGap {
   const unpaid = rows.filter((r) => r.status === "OVERDUE" || r.status === "DUE");
   if (!unpaid.length) return { amount: 0, sinceDate: null };
   return { amount: round2(unpaid.reduce((s, r) => s + r.amount, 0)), sinceDate: unpaid[0].end };
@@ -529,7 +543,13 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
   // interestRemaining / totalOutstanding above are untouched, so the real
   // rupee amount owed is never affected by which rule decided "overdue."
   const isMonthly = loan.interestFrequency === "MONTHLY";
-  const strictGap = isMonthly ? strictCycleGap(loan, today, payments, disbursements) : null;
+  // One schedule walk (past cycles + the one still running) serves both
+  // the overdue gap and the running cycle's own paid/unpaid state.
+  const schedule = isMonthly ? monthlyInterestSchedule(loan, today, payments, disbursements, 1) : [];
+  const strictGap = isMonthly ? gapFromSchedule(schedule) : null;
+  const todayIso = toISODate(today);
+  const running = schedule.find((r) => r.end > todayIso);
+  const currentCycle = running ? { end: running.end, amount: running.amount, paid: running.paid } : null;
   const rawInterestPendingWhole = strictGap ? strictGap.amount : Math.max(0, round2(breakdown.whole - interestPaid));
   const pendingSinceDate = strictGap ? strictGap.sinceDate : rawInterestPendingWhole > 0.01 ? breakdown.currentPeriodStart : null;
   const daysSincePeriodEnded = pendingSinceDate ? daysBetween(pendingSinceDate, today) : 0;
@@ -585,6 +605,7 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
     // it) still gets something sensible when nothing is pending.
     currentPeriodStart: pendingSinceDate ?? breakdown.currentPeriodStart,
     interestPaidThisPeriod,
+    currentCycle,
   };
 }
 
@@ -674,33 +695,51 @@ export function computeAllocation(
   custom?: { interestAmount?: number; principalAmount?: number },
   asOfDate?: string,
   disbursements?: Disbursement[]
-): { interestAmount: number; principalAmount: number; interestRemaining: number; principalRemaining: number; unallocated: number } {
+): {
+  interestAmount: number;
+  principalAmount: number;
+  interestRemaining: number;
+  /** Most interest this payment may take: accrued-to-date plus the rest of the running cycle, so a cycle can be paid in full a few days before it falls due. */
+  interestPayable: number;
+  /** Due date of the running cycle that interestPayable extends to, or null when there's nothing to prepay. */
+  currentPeriodEnd: string | null;
+  principalRemaining: number;
+  unallocated: number;
+} {
   const totalDisbursed = sum(effectiveDisbursements(loan, disbursements), (d) => d.amount);
   const principalPaid = sum(existingPayments, (p) => p.principalAmount);
   const interestPaid = sum(existingPayments, (p) => p.interestAmount);
   const principalRemaining = Math.max(0, totalDisbursed - principalPaid);
-  const interestRemaining = Math.max(
-    0,
-    calculateInterestForLoan(loan, asOfDate ?? businessNow(), existingPayments, disbursements) - interestPaid
-  );
+  const breakdown = calculateInterestBreakdown(loan, asOfDate ?? businessNow(), existingPayments, disbursements);
+  const interestRemaining = Math.max(0, breakdown.total - interestPaid);
+  const throughCycleEnd = breakdown.currentPeriodEnd ? calculateInterestForLoan(loan, breakdown.currentPeriodEnd, existingPayments, disbursements) : breakdown.total;
+  const interestPayable = Math.max(0, Math.max(breakdown.total, throughCycleEnd) - interestPaid);
   amount = Number(amount) || 0;
   let interestAmount = 0;
   let principalAmount = 0;
   if (mode === "interest") {
-    interestAmount = Math.min(amount, interestRemaining);
+    interestAmount = Math.min(amount, interestPayable);
   } else if (mode === "principal") {
     principalAmount = Math.min(amount, principalRemaining);
   } else if (mode === "custom") {
     interestAmount = Number(custom?.interestAmount) || 0;
     principalAmount = Number(custom?.principalAmount) || 0;
+  } else if (amount >= interestRemaining + principalRemaining - 0.01) {
+    // Enough to close the loan at today's figures: settle exactly that, so
+    // paying the displayed "Total outstanding" always closes the loan rather
+    // than spending part of it on the rest of a month that will never accrue.
+    interestAmount = interestRemaining;
+    principalAmount = principalRemaining;
   } else {
-    interestAmount = Math.min(amount, interestRemaining);
+    interestAmount = Math.min(amount, interestPayable);
     principalAmount = Math.min(amount - interestAmount, principalRemaining);
   }
   return {
     interestAmount: round2(interestAmount),
     principalAmount: round2(principalAmount),
     interestRemaining: round2(interestRemaining),
+    interestPayable: round2(interestPayable),
+    currentPeriodEnd: interestPayable > interestRemaining + 0.01 ? breakdown.currentPeriodEnd : null,
     principalRemaining: round2(principalRemaining),
     unallocated: round2(amount - interestAmount - principalAmount),
   };

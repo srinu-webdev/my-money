@@ -33,7 +33,17 @@ function interestStatus(l: LoanRow): InterestStatus {
 }
 const TONE: Record<InterestStatus, "warning" | "info" | "success" | "danger"> = { Pending: "warning", Partial: "info", Paid: "success", Overdue: "danger" };
 
-export function InterestTable({ loans, customerNames }: { loans: LoanRow[]; customerNames: Map<string, string> }) {
+export function InterestTable({
+  loans,
+  customerNames,
+  collectedThisMonth,
+  monthLabel,
+}: {
+  loans: LoanRow[];
+  customerNames: Map<string, string>;
+  collectedThisMonth: number;
+  monthLabel: string;
+}) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InterestStatus | "all">("all");
   const recordPayment = usePaymentFormModal();
@@ -68,16 +78,20 @@ export function InterestTable({ loans, customerNames }: { loans: LoanRow[]; cust
 
   return (
     <div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        {[
-          ["Interest Accrued", totals.accrued, "text-text"],
-          ["Interest Collected", totals.paid, "text-success-dark"],
-          ["Interest Pending", totals.pending, "text-warning-dark"],
-          ["Interest Overdue", totals.overdue, "text-danger"],
-        ].map(([label, val, cls]) => (
-          <div key={label as string} className="bg-surface border border-border rounded-2xl p-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-5">
+        {(
+          [
+            ["Interest Accrued", totals.accrued, "text-text", null],
+            ["Interest Collected", totals.paid, "text-success-dark", "All time"],
+            ["Collected This Month", collectedThisMonth, "text-success-dark", monthLabel],
+            ["Interest Pending", totals.pending, "text-warning-dark", null],
+            ["Interest Overdue", totals.overdue, "text-danger", null],
+          ] as const
+        ).map(([label, val, cls, sub]) => (
+          <div key={label} className="bg-surface border border-border rounded-2xl p-5">
             <div className="text-[12.5px] text-text-secondary font-medium">{label}</div>
-            <div className={`text-[22px] font-extrabold mt-1 tracking-tight mono-nums ${cls}`}>{formatCurrency(val as number)}</div>
+            <div className={`text-[22px] font-extrabold mt-1 tracking-tight mono-nums ${cls}`}>{formatCurrency(val)}</div>
+            {sub ? <div className="text-xs text-text-tertiary mt-0.5">{sub}</div> : null}
           </div>
         ))}
       </div>

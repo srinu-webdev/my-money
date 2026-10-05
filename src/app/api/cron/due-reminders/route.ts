@@ -58,11 +58,16 @@ export async function GET(request: Request) {
     if (bal.totalOutstanding <= 1) continue; // fully settled — nothing to remind about
 
     const who = `${loanRow.id} (${loanRow.customer.name})`;
+    // What's genuinely still owed for the cycle being collected — an ended
+    // but unpaid cycle first, else whatever the running cycle still lacks —
+    // so a cycle paid in advance doesn't trigger a reminder for it.
+    const cycleLeft = bal.currentCycle ? Math.max(0, bal.currentCycle.amount - bal.currentCycle.paid) : bal.interestPerPeriod;
+    const stillDue = bal.interestPendingWholeRaw > 0.01 ? bal.interestPendingWholeRaw : cycleLeft;
     let message: string | null = null;
-    if (daysUntil === REMINDER_DAYS_BEFORE) {
-      message = `Interest payment of ${formatCurrency(bal.interestPerPeriod)} for ${who} is due in ${REMINDER_DAYS_BEFORE} days, on ${formatDate(nextDue)}.`;
-    } else if (daysUntil === 0) {
-      message = `Interest payment of ${formatCurrency(bal.interestPerPeriod)} for ${who} is due today.`;
+    if (daysUntil === REMINDER_DAYS_BEFORE && stillDue > 1) {
+      message = `Interest payment of ${formatCurrency(stillDue)} for ${who} is due in ${REMINDER_DAYS_BEFORE} days, on ${formatDate(nextDue)}.`;
+    } else if (daysUntil === 0 && bal.interestPendingWholeRaw > 1) {
+      message = `Interest payment of ${formatCurrency(bal.interestPendingWholeRaw)} for ${who} is due today.`;
     } else if (bal.daysOverdue === 1) {
       // Fires once, the day after a cycle's due date passes unpaid — not
       // every day it stays overdue, so a long-overdue loan doesn't spam a
