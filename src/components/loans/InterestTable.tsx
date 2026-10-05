@@ -48,13 +48,16 @@ export function InterestTable({
   const [filter, setFilter] = useState<InterestStatus | "all">("all");
   const recordPayment = usePaymentFormModal();
 
-  const active = loans.filter((l) => l.derivedStatus !== "CANCELLED");
+  // Totals cover the whole portfolio (all-time collections include closed
+  // loans); the table and its tabs list only loans that are still open.
+  const portfolio = useMemo(() => loans.filter((l) => l.derivedStatus !== "CANCELLED"), [loans]);
+  const active = useMemo(() => portfolio.filter((l) => l.derivedStatus !== "PAID"), [portfolio]);
   const counts = useMemo(() => {
     const c: Record<InterestStatus | "all", number> = { all: active.length, Pending: 0, Partial: 0, Paid: 0, Overdue: 0 };
     active.forEach((l) => c[interestStatus(l)]++);
     return c;
   }, [active]);
-  const totals = active.reduce(
+  const totals = portfolio.reduce(
     (a, l) => {
       a.accrued += l.balance.interestAccrued;
       a.paid += l.balance.interestPaid;
