@@ -17,6 +17,9 @@ export default async function RevenuePage() {
   const interestSeries = monthlyAggregate(payments, (p) => p.paymentDate, (p) => p.interestAmount, months);
   const collectionSeries = monthlyAggregate(payments, (p) => p.paymentDate, (p) => p.amount, months);
   const principalCollected = payments.reduce((s, p) => s + p.principalAmount, 0);
+  // Summed from the payments themselves: "earned − pending" undercounts any
+  // interest collected in advance of accruing (an early-paid monthly cycle).
+  const interestCollected = payments.reduce((s, p) => s + p.interestAmount, 0);
 
   return (
     <div>
@@ -29,7 +32,7 @@ export default async function RevenuePage() {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
         <StatCard label="Total Interest Earned" value={formatCurrency(stats.interestEarned)} icon={Percent} tone="primary" hint="Accrued to date" />
-        <StatCard label="Interest Collected" value={formatCurrency(stats.interestEarned - stats.interestPending)} icon={CheckCircle} tone="success" />
+        <StatCard label="Interest Collected" value={formatCurrency(interestCollected)} icon={CheckCircle} tone="success" />
         <StatCard label="Interest Pending" value={formatCurrency(stats.interestPending)} icon={Clock} tone="warning" />
         <StatCard label="Principal Collected" value={formatCurrency(principalCollected)} icon={TrendingUp} tone="info" />
         <StatCard label="Total Collections" value={formatCurrency(stats.totalCollected)} icon={Wallet} tone="purple" />

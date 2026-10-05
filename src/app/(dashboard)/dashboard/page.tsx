@@ -135,7 +135,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const exportRows: (string | number)[][] = [
     ["Period", rep.range.label],
-    ["Total Portfolio", totalPortfolioValue],
+    ["Total Portfolio (principal out)", stats.principalOutstanding],
     ["Money Disbursed (period)", rep.lent],
     ["Total Collected (period)", rep.totalCollected],
     ["Outstanding Amount", totalPortfolioValue],
@@ -155,10 +155,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <DashboardHeader greeting={`${greeting}, ${firstName}`} rangeKey={rangeKey} rangeLabel={rep.range.label} exportRows={exportRows} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        <KpiCard label="Total Portfolio" value={formatCurrency(totalPortfolioValue)} icon={Wallet} tone="primary" hint="As of today" />
+        <KpiCard label="Total Portfolio" value={formatCurrency(stats.principalOutstanding)} icon={Wallet} tone="primary" hint="Principal out with borrowers" />
         <KpiCard label="Money Disbursed" value={formatCurrency(rep.lent)} icon={HandCoins} tone="info" changePct={lentChange} changeLabel="vs previous period" trend={moneyDisbursed} />
         <KpiCard label="Total Collected" value={formatCurrency(rep.totalCollected)} icon={Wallet} tone="success" changePct={collectedChange} changeLabel="vs previous period" trend={collections} />
-        <KpiCard label="Outstanding Amount" value={formatCurrency(totalPortfolioValue)} icon={CreditCard} tone="warning" hint={`${stats.overdueLoans} overdue loan${stats.overdueLoans === 1 ? "" : "s"}`} />
+        <KpiCard label="Outstanding Amount" value={formatCurrency(totalPortfolioValue)} icon={CreditCard} tone="warning" hint={`Principal + interest · ${stats.overdueLoans} overdue loan${stats.overdueLoans === 1 ? "" : "s"}`} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5 mb-5 items-stretch">
