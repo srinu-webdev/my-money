@@ -177,6 +177,9 @@ export interface LoanBalance {
   // how much of its interest payments have already covered — so a cycle
   // paid a few days early isn't listed as still to collect.
   currentCycle: { end: string; amount: number; paid: number } | null;
+  // MONTHLY loans only: the installment falling due in the current calendar
+  // month (or the running cycle if none does), and how much of it is paid.
+  thisMonthCycle: { end: string; amount: number; paid: number } | null;
 }
 
 export interface LoanWithBalance extends Loan {

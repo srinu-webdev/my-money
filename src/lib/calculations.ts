@@ -550,6 +550,12 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
   const todayIso = toISODate(today);
   const running = schedule.find((r) => r.end > todayIso);
   const currentCycle = running ? { end: running.end, amount: running.amount, paid: running.paid } : null;
+  // "This month's installment" = the cycle falling due in the current
+  // calendar month (falls back to the running cycle for a loan whose first
+  // due date is next month), so a payment that settled LAST month's cycle
+  // late isn't shown as this month's.
+  const dueThisMonth = schedule.find((r) => r.end.slice(0, 7) === todayIso.slice(0, 7)) ?? running;
+  const thisMonthCycle = dueThisMonth ? { end: dueThisMonth.end, amount: dueThisMonth.amount, paid: dueThisMonth.paid } : null;
   const rawInterestPendingWhole = strictGap ? strictGap.amount : Math.max(0, round2(breakdown.whole - interestPaid));
   const pendingSinceDate = strictGap ? strictGap.sinceDate : rawInterestPendingWhole > 0.01 ? breakdown.currentPeriodStart : null;
   const daysSincePeriodEnded = pendingSinceDate ? daysBetween(pendingSinceDate, today) : 0;
@@ -606,6 +612,7 @@ export function calculateLoanBalance(loan: Loan, payments: Payment[], asOfDate?:
     currentPeriodStart: pendingSinceDate ?? breakdown.currentPeriodStart,
     interestPaidThisPeriod,
     currentCycle,
+    thisMonthCycle,
   };
 }
 

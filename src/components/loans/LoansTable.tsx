@@ -168,9 +168,12 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                   const b = l.balance;
                   const open = l.derivedStatus !== "PAID" && l.derivedStatus !== "CANCELLED";
                   const overdueCaption = pendingInterestCaption(l.derivedStatus, b);
-                  // This month's cycle already covered (e.g. paid a few days before its due date).
-                  const cycle = b.currentCycle;
+                  // This month's installment already covered (on time, or early).
+                  const cycle = b.thisMonthCycle;
                   const cyclePaid = cycle !== null && cycle.amount > 0.01 && cycle.paid >= cycle.amount - 0.01;
+                  // A loan closed in an earlier month paid nothing this month.
+                  const closedEarlier = l.paidAt !== null && l.paidAt.slice(0, 7) < businessToday().slice(0, 7);
+                  const paidThisMonth = cycle ? cycle.paid : closedEarlier ? 0 : b.interestPaidThisPeriod;
                   return (
                     <tr key={l.id} className={l.derivedStatus === "OVERDUE" ? "bg-danger-light/30 hover:bg-danger-light/50" : "hover:bg-surface-2"}>
                       <Td>
@@ -210,8 +213,8 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                           <div className="text-xs font-normal text-text-tertiary mt-0.5">Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
                         ) : null}
                       </Td>
-                      <Td className={`hidden lg:table-cell text-right mono-nums ${b.interestPaidThisPeriod >= b.interestPerPeriod && b.interestPerPeriod > 0 ? "text-success-dark font-semibold" : "text-success-dark"}`}>
-                        {formatCurrency(b.interestPaidThisPeriod)}
+                      <Td className={`hidden lg:table-cell text-right mono-nums ${cyclePaid || (paidThisMonth >= b.interestPerPeriod && b.interestPerPeriod > 0) ? "text-success-dark font-semibold" : "text-success-dark"}`}>
+                        {formatCurrency(paidThisMonth)}
                       </Td>
                       <Td className="hidden lg:table-cell text-right mono-nums text-success-dark">{formatCurrency(b.principalPaid)}</Td>
                       <Td className={`text-right mono-nums font-semibold ${open && b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
