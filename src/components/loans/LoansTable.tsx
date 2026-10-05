@@ -18,7 +18,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { usePagination, useSort } from "@/lib/hooks/useTableState";
 import { formatCurrency } from "@/lib/format";
-import { addDays, businessToday, formatDate } from "@/lib/dates";
+import { addDays, businessToday, formatDate, parseDate } from "@/lib/dates";
 import { FREQ_LABEL, STATUS_LABEL, nextMonthlyCollectionDate, pendingInterestCaption } from "@/lib/calculations";
 import type { LoanRow } from "@/lib/queries";
 import type { LoanStatus } from "@/lib/types";
@@ -41,6 +41,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<LoanStatus | "all">("all");
   const router = useRouter();
+  const monthShort = new Intl.DateTimeFormat("en-IN", { month: "short" }).format(parseDate(businessToday()));
   const confirm = useConfirm();
   const editLoan = useEditLoanModal();
   const sendReminder = useSendReminder();
@@ -156,7 +157,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                   <Th className="hidden md:table-cell">Frequency</Th>
                   <SortTh label="Start" active={field === "startDate"} dir={dir} onClick={() => toggle("startDate")} className="hidden md:table-cell" />
                   <Th className="hidden lg:table-cell text-right">Interest This Month</Th>
-                  <Th className="hidden lg:table-cell text-right">Paid This Month</Th>
+                  <Th className="hidden lg:table-cell text-right">Paid This Month ({monthShort})</Th>
                   <Th className="hidden lg:table-cell text-right">Principal Paid</Th>
                   <SortTh label="Outstanding" active={field === "outstanding"} dir={dir} onClick={() => toggle("outstanding")} className="text-right" />
                   <Th>Status</Th>
@@ -204,13 +205,13 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                           // its 5-day grace window — showing nextMonthlyCollectionDate here
                           // would jump straight to NEXT month, silently hiding that this
                           // period's own payment (due on currentPeriodStart) hasn't come in.
-                          <div className="text-xs font-normal text-warning-dark mt-0.5">Due {formatDate(b.currentPeriodStart)}</div>
+                          <div className="text-xs font-semibold text-warning-dark mt-0.5">Due {formatDate(b.currentPeriodStart)}</div>
                         ) : cyclePaid ? (
                           <div className="text-xs font-semibold text-success-dark mt-0.5">
                             Paid · next due {formatDate(nextMonthlyCollectionDate(l.startDate, addDays(cycle.end, 1), l.collectionDay).date)}
                           </div>
                         ) : open && b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
-                          <div className="text-xs font-normal text-text-tertiary mt-0.5">Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
+                          <div className="text-xs font-semibold text-warning-dark mt-0.5">Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
                         ) : null}
                       </Td>
                       <Td className={`hidden lg:table-cell text-right mono-nums ${cyclePaid || (paidThisMonth >= b.interestPerPeriod && b.interestPerPeriod > 0) ? "text-success-dark font-semibold" : "text-success-dark"}`}>
