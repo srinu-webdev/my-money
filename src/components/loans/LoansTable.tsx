@@ -196,7 +196,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                           <div className="text-xs font-normal text-warning-dark mt-0.5">
                             {overdueCaption} ({formatCurrency(b.interestPendingWhole)})
                           </div>
-                        ) : b.interestPendingWholeRaw > 0.01 ? (
+                        ) : open && b.interestPendingWholeRaw > 0.01 ? (
                           // A just-completed period is genuinely unpaid but still inside
                           // its 5-day grace window — showing nextMonthlyCollectionDate here
                           // would jump straight to NEXT month, silently hiding that this
@@ -206,7 +206,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                           <div className="text-xs font-semibold text-success-dark mt-0.5">
                             Paid · next due {formatDate(nextMonthlyCollectionDate(l.startDate, addDays(cycle.end, 1), l.collectionDay).date)}
                           </div>
-                        ) : b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
+                        ) : open && b.interestPerPeriod > 0 && l.interestFrequency === "MONTHLY" ? (
                           <div className="text-xs font-normal text-text-tertiary mt-0.5">Due {formatDate(nextMonthlyCollectionDate(l.startDate, undefined, l.collectionDay).date)}</div>
                         ) : null}
                       </Td>
@@ -214,7 +214,7 @@ export function LoansTable({ loans, customerNames }: { loans: LoanRow[]; custome
                         {formatCurrency(b.interestPaidThisPeriod)}
                       </Td>
                       <Td className="hidden lg:table-cell text-right mono-nums text-success-dark">{formatCurrency(b.principalPaid)}</Td>
-                      <Td className={`text-right mono-nums font-semibold ${b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
+                      <Td className={`text-right mono-nums font-semibold ${open && b.totalOutstanding > 0 ? "text-warning-dark" : "text-success-dark"}`}>{formatCurrency(b.totalOutstanding)}</Td>
                       <Td>
                         <StatusBadge status={l.derivedStatus} />
                       </Td>
